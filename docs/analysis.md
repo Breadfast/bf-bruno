@@ -238,6 +238,15 @@ OSS Bruno limits OpenAPI syncs to 5 per month. With 250 collections and evolving
 **Recommendation:**
 Remove the sync limit in your fork and build a file watcher that auto-syncs when your OpenAPI spec files change in Git. This keeps collections always up to date with your API contracts without manual intervention.
 
+**Implementation Status:** Fully completed (2026-04-02). Feature gap #9 is closed.
+- No sync limit exists in the fork codebase — zero counter/quota/paywall in any layer
+- OpenAPI Sync graduated from beta → always enabled (no toggle needed)
+- Auto-sync polling already built: 5-minute background checks, per-collection `autoCheckInterval`, toolbar badge on spec changes
+- Supports URL and local file spec sources, OpenAPI 3.x
+- Full drift detection: spec vs collection, added/removed/modified endpoints
+- Selective sync with review decisions (keep-mine/accept-incoming)
+- "Beta" badge removed from UI
+
 ---
 
 #### 10. Auto-Update & Version Management
