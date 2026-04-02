@@ -23,7 +23,7 @@ const {
 const { dotenvToJson } = require('@usebruno/lang');
 const { utils } = require('@usebruno/common');
 const brunoConverters = require('@usebruno/converters');
-const { postmanToBruno } = brunoConverters;
+const { postmanToBruno, postmanToBrunoEnvironment } = brunoConverters;
 const { cookiesStore } = require('../store/cookies');
 const { parseLargeRequestWithRedaction } = require('../utils/parse');
 const { wsClient } = require('../ipc/network/ws-event-handlers');
@@ -2313,6 +2313,75 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
       );
     } catch {
       return false;
+    }
+  });
+
+  ipcMain.handle('renderer:is-postman-dump-zip', async (event, zipFilePath) => {
+    try {
+      const zip = new AdmZip(zipFilePath);
+      const entries = zip.getEntries().map((e) => e.entryName);
+
+      // Postman data dump structure: {uuid}/ containing collection/ and environment/ dirs
+      const hasCollectionDir = entries.some((name) => /^[^/]+\/collection\//.test(name));
+      const hasArchiveJson = entries.some((name) => /^[^/]+\/archive\.json$/.test(name));
+
+      return hasCollectionDir && hasArchiveJson;
+    } catch {
+      return false;
+    }
+  });
+
+  ipcMain.handle('renderer:extract-postman-dump-zip', async (event, zipFilePath) => {
+    try {
+      const zip = new AdmZip(zipFilePath);
+      const entries = zip.getEntries();
+
+      const collectionEntries = entries.filter(
+        (e) => !e.isDirectory && /^[^/]+\/collection\/[^/]+\.json$/.test(e.entryName)
+      );
+      const environmentEntries = entries.filter(
+        (e) => !e.isDirectory && /^[^/]+\/environment\/[^/]+\.json$/.test(e.entryName)
+      );
+
+      const collections = [];
+      const errors = [];
+
+      for (const entry of collectionEntries) {
+        try {
+          const rawJson = JSON.parse(entry.getData().toString('utf8'));
+          const brunoCollection = await postmanToBruno(rawJson, { useWorkers: false });
+          collections.push(brunoCollection);
+        } catch (err) {
+          const fileName = path.basename(entry.entryName);
+          errors.push({ file: fileName, error: err.message || 'Conversion failed' });
+        }
+      }
+
+      const environments = [];
+      for (const entry of environmentEntries) {
+        try {
+          const rawJson = JSON.parse(entry.getData().toString('utf8'));
+          const brunoEnv = postmanToBrunoEnvironment(rawJson);
+          brunoEnv.uid = brunoEnv.uid || rawJson.id || path.basename(entry.entryName, '.json');
+          environments.push(brunoEnv);
+        } catch (err) {
+          const fileName = path.basename(entry.entryName);
+          errors.push({ file: fileName, error: err.message || 'Environment conversion failed' });
+        }
+      }
+
+      if (collections.length === 0) {
+        throw new Error('No valid Postman collections found in the ZIP file');
+      }
+
+      if (errors.length > 0) {
+        console.warn('Postman dump import errors:', errors);
+      }
+
+      return { collections, environments, errors };
+    } catch (err) {
+      console.error('Error extracting Postman dump ZIP:', err);
+      throw err;
     }
   });
 

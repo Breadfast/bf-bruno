@@ -84,7 +84,24 @@ const FileTab = ({
         return;
       }
 
-      toastError(new Error('The ZIP file is not a valid Bruno collection'));
+      const isPostmanDump = await window.ipcRenderer.invoke('renderer:is-postman-dump-zip', filePath);
+
+      if (isPostmanDump) {
+        const result = await window.ipcRenderer.invoke('renderer:extract-postman-dump-zip', filePath);
+
+        if (result.errors && result.errors.length > 0) {
+          console.warn('Postman dump import: some files failed to convert:', result.errors);
+        }
+
+        await handleSubmit({
+          collection: result.collections,
+          environment: result.environments,
+          type: 'bulk'
+        });
+        return;
+      }
+
+      toastError(new Error('The ZIP file is not a valid Bruno collection or Postman data export'));
     } catch (err) {
       toastError(err, 'Import ZIP file failed');
     } finally {
@@ -271,7 +288,7 @@ const FileTab = ({
             </button>
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-            Supports Bruno, OpenCollection, Postman, Insomnia, OpenAPI v3, WSDL, and ZIP formats
+            Supports Bruno, OpenCollection, Postman, Insomnia, OpenAPI v3, WSDL, ZIP, and Postman Data Export (.zip)
           </p>
         </div>
       </div>

@@ -5,7 +5,9 @@ const archiver = require('archiver');
 const extractZip = require('extract-zip');
 const { ipcMain, dialog } = require('electron');
 const isDev = require('electron-is-dev');
-const { createDirectory, sanitizeName, writeFile, DEFAULT_GITIGNORE } = require('../utils/filesystem');
+const { createDirectory, sanitizeName, writeFile, DEFAULT_GITIGNORE, safeWriteFileSync } = require('../utils/filesystem');
+const brunoConverters = require('@usebruno/converters');
+const { postmanToBruno, postmanToBrunoEnvironment } = brunoConverters;
 const yaml = require('js-yaml');
 const LastOpenedWorkspaces = require('../store/last-opened-workspaces');
 const { defaultWorkspaceManager } = require('../store/default-workspace');
@@ -433,6 +435,310 @@ const registerWorkspaceIpc = (mainWindow, workspaceWatcher) => {
       throw error;
     }
   });
+
+  ipcMain.handle('renderer:scan-postman-backup-folder', async (event, folderPath) => {
+    try {
+      if (!folderPath || !fs.existsSync(folderPath)) {
+        throw new Error('Folder does not exist');
+      }
+
+      const entries = fs.readdirSync(folderPath, { withFileTypes: true });
+      const workspaces = [];
+
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+
+        const workspaceDir = path.join(folderPath, entry.name);
+        const collectionsDir = path.join(workspaceDir, 'collections');
+        const environmentsDir = path.join(workspaceDir, 'environments');
+
+        // A valid Postman workspace folder has at least a collections/ subfolder
+        // or JSON files at root level
+        const hasCollectionsDir = fs.existsSync(collectionsDir) && fs.statSync(collectionsDir).isDirectory();
+        const hasEnvironmentsDir = fs.existsSync(environmentsDir) && fs.statSync(environmentsDir).isDirectory();
+
+        let collectionCount = 0;
+        let environmentCount = 0;
+
+        if (hasCollectionsDir) {
+          collectionCount = fs.readdirSync(collectionsDir).filter((f) => f.endsWith('.json')).length;
+        }
+
+        if (hasEnvironmentsDir) {
+          environmentCount = fs.readdirSync(environmentsDir).filter((f) => f.endsWith('.json')).length;
+        }
+
+        if (collectionCount > 0 || environmentCount > 0) {
+          workspaces.push({
+            name: entry.name,
+            folderName: entry.name,
+            collectionCount,
+            environmentCount
+          });
+        }
+      }
+
+      return { workspaces };
+    } catch (err) {
+      console.error('Error scanning Postman backup folder:', err);
+      throw err;
+    }
+  });
+
+  ipcMain.handle('renderer:import-postman-workspaces',
+    async (event, sourceFolderPath, targetLocation, selectedWorkspaces) => {
+      try {
+        if (!sourceFolderPath || !fs.existsSync(sourceFolderPath)) {
+          throw new Error('Source folder does not exist');
+        }
+        if (!targetLocation || !fs.existsSync(targetLocation)) {
+          throw new Error('Target location does not exist');
+        }
+
+        const results = [];
+
+        for (const ws of selectedWorkspaces) {
+          const wsSourceDir = path.join(sourceFolderPath, ws.folderName);
+
+          try {
+            mainWindow.webContents.send('main:postman-workspace-import-progress', {
+              workspace: ws.name,
+              status: 'converting'
+            });
+
+            // Convert collections
+            const collectionsDir = path.join(wsSourceDir, 'collections');
+            const collections = [];
+            const errors = [];
+
+            if (fs.existsSync(collectionsDir)) {
+              const collFiles = fs.readdirSync(collectionsDir).filter((f) => f.endsWith('.json'));
+              for (const file of collFiles) {
+                try {
+                  let rawJson = JSON.parse(fs.readFileSync(path.join(collectionsDir, file), 'utf8'));
+                  // Unwrap if nested inside { collection: { ... } }
+                  if (rawJson.collection && rawJson.collection.info) {
+                    rawJson = rawJson.collection;
+                  }
+                  const brunoCollection = await postmanToBruno(rawJson, { useWorkers: false });
+                  collections.push(brunoCollection);
+                } catch (err) {
+                  errors.push({ file, error: err.message });
+                }
+              }
+            }
+
+            // Convert environments
+            const environmentsDir = path.join(wsSourceDir, 'environments');
+            const environments = [];
+
+            if (fs.existsSync(environmentsDir)) {
+              const envFiles = fs.readdirSync(environmentsDir).filter((f) => f.endsWith('.json'));
+              for (const file of envFiles) {
+                try {
+                  let rawJson = JSON.parse(fs.readFileSync(path.join(environmentsDir, file), 'utf8'));
+                  // Unwrap if nested inside { environment: { ... } }
+                  if (rawJson.environment && rawJson.environment.name) {
+                    rawJson = rawJson.environment;
+                  }
+                  const brunoEnv = postmanToBrunoEnvironment(rawJson);
+                  brunoEnv.uid = brunoEnv.uid || rawJson.id || path.basename(file, '.json');
+                  environments.push(brunoEnv);
+                } catch (err) {
+                  errors.push({ file, error: err.message });
+                }
+              }
+            }
+
+            mainWindow.webContents.send('main:postman-workspace-import-progress', {
+              workspace: ws.name,
+              status: 'creating'
+            });
+
+            // Create Bruno workspace — skip if already exists
+            const workspaceFolderName = sanitizeName(ws.name);
+            const workspaceDirPath = path.join(targetLocation, workspaceFolderName);
+
+            if (fs.existsSync(workspaceDirPath)) {
+              results.push({
+                workspace: ws.name,
+                status: 'skipped',
+                reason: 'Workspace already exists'
+              });
+
+              mainWindow.webContents.send('main:postman-workspace-import-progress', {
+                workspace: ws.name,
+                status: 'skipped'
+              });
+              continue;
+            }
+
+            await createDirectory(workspaceDirPath);
+            await createDirectory(path.join(workspaceDirPath, 'collections'));
+
+            const workspaceConfig = createWorkspaceConfig(ws.name);
+            await writeWorkspaceConfig(workspaceDirPath, workspaceConfig);
+            await writeFile(path.join(workspaceDirPath, '.gitignore'), DEFAULT_GITIGNORE);
+
+            // Import collections into workspace
+            const collectionPaths = [];
+            const filestore = require('@usebruno/filestore');
+            const stringifyRequestViaWorker = filestore.stringifyRequestViaWorker;
+            const stringifyFolder = filestore.stringifyFolder;
+            const stringifyEnvironment = filestore.stringifyEnvironment;
+            const COLLECTION_FORMAT = filestore.DEFAULT_COLLECTION_FORMAT;
+
+            const collectionsBasePath = path.join(workspaceDirPath, 'collections');
+
+            for (const coll of collections) {
+              try {
+                const collName = sanitizeName(coll.name);
+                let collPath = path.join(collectionsBasePath, collName);
+                let nameCounter = 1;
+                while (fs.existsSync(collPath)) {
+                  collPath = path.join(collectionsBasePath, `${collName} (${nameCounter})`);
+                  nameCounter++;
+                }
+
+                fs.mkdirSync(collPath, { recursive: true });
+
+                // Write collection config
+                const format = COLLECTION_FORMAT;
+                if (format === 'yml') {
+                  const ocConfig = yaml.dump({
+                    info: { name: coll.name, version: '1' }
+                  });
+                  fs.writeFileSync(path.join(collPath, 'opencollection.yml'), ocConfig);
+                } else {
+                  const brunoConfig = {
+                    version: '1',
+                    name: coll.name,
+                    type: 'collection'
+                  };
+                  fs.writeFileSync(path.join(collPath, 'bruno.json'), JSON.stringify(brunoConfig, null, 2));
+                }
+
+                // Write environments
+                if (coll.environments && coll.environments.length > 0) {
+                  const envDir = path.join(collPath, 'environments');
+                  fs.mkdirSync(envDir, { recursive: true });
+                  for (const env of coll.environments) {
+                    const envContent = await stringifyEnvironment(env);
+                    const envFileName = `${sanitizeName(env.name)}.${format}`;
+                    safeWriteFileSync(path.join(envDir, envFileName), envContent);
+                  }
+                }
+
+                // Write requests recursively
+                const writeItems = async (items = [], currentPath) => {
+                  for (const item of items) {
+                    if (['http-request', 'graphql-request', 'grpc-request', 'ws-request'].includes(item.type)) {
+                      try {
+                        const fileName = sanitizeName(item.filename || `${item.name}.${format}`);
+                        const content = await stringifyRequestViaWorker(item, { format });
+                        safeWriteFileSync(path.join(currentPath, fileName), content);
+                      } catch (writeErr) {
+                        console.error(`Failed to write request "${item.name}":`, writeErr.message);
+                      }
+                    }
+                    if (item.type === 'folder') {
+                      const folderName = sanitizeName(item.filename || item.name);
+                      const folderPath = path.join(currentPath, folderName);
+                      fs.mkdirSync(folderPath, { recursive: true });
+
+                      if (item.root?.meta?.name) {
+                        item.root.meta.seq = item.seq;
+                        const folderContent = await stringifyFolder(item.root, { format });
+                        safeWriteFileSync(path.join(folderPath, `folder.${format}`), folderContent);
+                      }
+
+                      if (item.items && item.items.length) {
+                        await writeItems(item.items, folderPath);
+                      }
+                    }
+                  }
+                };
+
+                await writeItems(coll.items, collPath);
+                collectionPaths.push({ path: collPath, name: coll.name });
+              } catch (err) {
+                errors.push({ file: coll.name, error: err.message });
+              }
+            }
+
+            // Add collections to workspace config
+            for (const collInfo of collectionPaths) {
+              await addCollectionToWorkspace(workspaceDirPath, { path: collInfo.path, name: collInfo.name });
+            }
+
+            // Import environments as workspace-level environments
+            if (environments.length > 0) {
+              const importedEnvNames = new Set();
+              for (const env of environments) {
+                try {
+                  // Skip duplicate environment names
+                  if (importedEnvNames.has(env.name)) {
+                    continue;
+                  }
+                  await globalEnvironmentsManager.createGlobalEnvironment(workspaceDirPath, {
+                    name: env.name,
+                    variables: env.variables || []
+                  });
+                  importedEnvNames.add(env.name);
+                } catch (err) {
+                  errors.push({ file: env.name, error: err.message });
+                }
+              }
+            }
+
+            // Open the workspace
+            const workspaceUid = getWorkspaceUid(workspaceDirPath);
+            const isDefault = workspaceUid === 'default';
+            const finalConfig = readWorkspaceConfig(workspaceDirPath);
+            const configForClient = prepareWorkspaceConfigForClient(finalConfig, workspaceDirPath, isDefault);
+
+            lastOpenedWorkspaces.add(workspaceDirPath);
+            mainWindow.webContents.send('main:workspace-opened', workspaceDirPath, workspaceUid, configForClient);
+
+            if (workspaceWatcher) {
+              workspaceWatcher.addWatcher(mainWindow, workspaceDirPath);
+            }
+
+            results.push({
+              workspace: ws.name,
+              status: 'success',
+              collections: collectionPaths.length,
+              environments: environments.length,
+              errors
+            });
+
+            mainWindow.webContents.send('main:postman-workspace-import-progress', {
+              workspace: ws.name,
+              status: 'success',
+              collections: collectionPaths.length,
+              environments: environments.length
+            });
+          } catch (err) {
+            results.push({
+              workspace: ws.name,
+              status: 'error',
+              error: err.message
+            });
+
+            mainWindow.webContents.send('main:postman-workspace-import-progress', {
+              workspace: ws.name,
+              status: 'error',
+              error: err.message
+            });
+          }
+        }
+
+        return { results };
+      } catch (err) {
+        console.error('Error importing Postman workspaces:', err);
+        throw err;
+      }
+    });
 
   ipcMain.handle('renderer:save-workspace-docs', async (event, workspacePath, docs) => {
     try {

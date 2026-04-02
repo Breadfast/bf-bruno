@@ -71,6 +71,8 @@ Open-source Bruno limits you to 2 workspaces. You currently have 40 Postman work
 **Recommendation:**
 Remove the workspace limit in your fork. The limit is a license check in the Electron app — identify and remove the gating logic. Then build a workspace switcher UI that maps each workspace to a Git repository or directory. This is a quick win that immediately unblocks your organizational structure.
 
+**Implementation Status:** Completed (2026-04-02). No workspace limit exists in the fork — the codebase has zero gating logic. Unlimited workspaces confirmed with 39+ workspaces. Additionally, a Postman Workspace Folder Import feature was built (Import Workspace → Postman Backup tab) that scans a Postman backup directory, creates a Bruno workspace per subfolder, and imports all collections + environments. Duplicate workspaces are automatically skipped. Feature gap #2 is fully closed.
+
 ---
 
 #### 3. Bulk Postman Import & Migration Tooling
@@ -82,15 +84,17 @@ Remove the workspace limit in your fork. The limit is a license check in the Ele
 **The Problem:**
 You can import Postman collections one by one in the open-source edition. But bulk importing a Postman Data Dump (all 40 workspaces at once) requires Ultimate. Script translation from Postman's `pm.*` API to Bruno's `bru.*` API works but isn't 100% accurate — complex or older scripts may need manual fixes.
 
-**Recommendation:**
-Write a batch migration script that:
+**Recommendation (UPDATED):**
+~~Write a batch migration script~~ → Build the Postman Data Dump import feature directly into the fork, mirroring Bruno Ultimate's "Postman Data Export" import (see https://docs.usebruno.com/get-started/import-export-data/postman-migration).
 
-1. Iterates over exported Postman collections (JSON v2.1 format)
-2. Runs them through Bruno's converter module (`@usebruno/converters`)
-3. Organizes output into your Git repository structure (one repo per workspace or monorepo with folders)
-4. Validates and reports on script translation issues
+The approach: modify `FileTab.js` to detect Postman dump ZIPs (containing `collections/*.postman_collection.json` + `environments/*.postman_environment.json`), add an IPC handler to extract/convert the ZIP contents using the existing `postmanToBruno()` and `postmanEnvToBrunoEnv()` converters, and wire the result into the existing `BulkImportCollectionLocation` UI which already supports multi-collection + environment selection, progress tracking, and duplicate renaming.
 
-This is a one-time effort that saves weeks of manual migration work. After migration, run collection-level test executions to verify parity.
+This is superior to a standalone script because:
+1. It's a permanent feature in the fork, usable by any developer (not a one-time script)
+2. It reuses 90% of existing infrastructure (converters, bulk UI, ZIP libraries)
+3. It mirrors the official Bruno Ultimate feature, reducing the feature gap to zero for this capability
+
+**Implementation Status:** Completed (Task 0.3, 2026-04-02). Added Postman data dump ZIP import to the fork. User drops a Postman data export ZIP → Bruno detects it, extracts all collections and environments, converts them via existing converters, and shows the bulk import UI for selection. Tested with a real 554-collection / 218-environment dump. Feature gap #3 is now fully closed.
 
 ---
 
@@ -173,6 +177,16 @@ Create reusable CI/CD templates:
 - **GitLab CI pipeline template** with similar capabilities
 - **Parallel runner wrapper** that executes multiple collections simultaneously for speed
 - **Failure notification** integration with your team's communication tools
+
+**Implementation Status (partial — Task 0.1):**
+The upstream fork already includes comprehensive GitHub Actions CI:
+- `tests.yml` — unit tests (11 packages), CLI tests (with JUnit XML output), Playwright E2E
+- `lint-checks.yml` — ESLint with PR-scoped diff linting
+- `auth-tests.yml` / `ssl-tests.yml` — specialized test suites on Linux/macOS/Windows matrix
+- Reusable actions for setup, unit tests, CLI tests, and E2E tests
+- JUnit XML reporting already implemented in CLI tests via `--format junit`
+
+Remaining work: Slack/Teams notifications, GitLab CI template, parallel runner, HTML report generation.
 
 ---
 

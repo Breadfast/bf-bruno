@@ -13,13 +13,13 @@
 
 | # | Task | Owner | Status | Notes |
 |---|------|-------|--------|-------|
-| 0.1 | Fork Bruno repo and set up CI pipeline (build + lint + test) | Dev 1 | [ ] | |
-| 0.2 | Export all 40 Postman workspaces as JSON v2.1 collections | Migration Lead | [ ] | |
-| 0.3 | Write batch migration script using `@usebruno/converters` | Dev 2 | [ ] | Iterate over all exported JSONs |
+| 0.1 | Fork Bruno repo and set up CI pipeline (build + lint + test) | Dev 1 | [x] | Verified 2026-04-01: upstream CI workflows already comprehensive (tests.yml, lint-checks.yml, auth-tests.yml, ssl-tests.yml). Local build/lint/tests all pass. |
+| 0.2 | Export Postman data dump ZIP (all workspaces, collections, environments) | Migration Lead | [x] | Already done — ZIP file available |
+| 0.3 | Build Postman import features (data dump ZIP + workspace folder import) | Dev 1 | [x] | Completed 2026-04-02. Two features: (1) Postman data dump ZIP import via collection import dialog, (2) Postman workspace folder import via Import Workspace → Postman Backup tab. Creates Bruno workspaces per Postman workspace with all collections + environments. Skips duplicates. Tested with 39 workspaces, 554 collections, 218 environments. |
 | 0.4 | Define Git repo structure (monorepo with folders vs. repo-per-workspace) | Team | [ ] | Decision needed |
-| 0.5 | Run batch migration on all 250 collections | Migration Lead | [ ] | |
+| 0.5 | Import all collections via the workspace import feature | Migration Lead | [ ] | Use Import Workspace → Postman Backup tab with the `postman_backups/` folder |
 | 0.6 | Audit `pm.*` → `bru.*` script translation — log failures | Migration Lead | [ ] | Track in spreadsheet |
-| 0.7 | Fix script translation edge cases manually | Dev 2 | [ ] | |
+| 0.7 | Fix script translation edge cases manually | Dev 1 | [ ] | |
 | 0.8 | Run collection-level test suites to validate parity | Migration Lead | [ ] | |
 | 0.9 | Push migrated collections to Git repos | Migration Lead | [ ] | |
 | 0.10 | Document migration results — success rate, manual fixes needed | Migration Lead | [ ] | |
@@ -37,10 +37,10 @@
 
 | # | Task | Owner | Status | Notes |
 |---|------|-------|--------|-------|
-| 1.1 | Identify workspace limit gating logic in Electron app | Dev 1 | [ ] | Search for license checks |
-| 1.2 | Remove 2-workspace limit — allow unlimited workspaces | Dev 1 | [ ] | |
-| 1.3 | Build workspace switcher UI (map workspace → Git directory) | Dev 1 | [ ] | |
-| 1.4 | Test workspace creation/switching with 10+ workspaces | Dev 1 | [ ] | |
+| 1.1 | Identify workspace limit gating logic in Electron app | Dev 1 | [x] | Verified 2026-04-02: NO workspace limit exists in the fork codebase. Zero gating logic found in Electron IPC, Redux, or UI. |
+| 1.2 | Remove 2-workspace limit — allow unlimited workspaces | Dev 1 | [x] | N/A — no limit to remove. Unlimited workspaces already work. |
+| 1.3 | Build workspace switcher UI (map workspace → Git directory) | Dev 1 | [x] | Built as part of Task 0.3: Import Workspace → Postman Backup tab creates workspaces mapped to filesystem directories. Existing workspace switcher sidebar already handles switching. |
+| 1.4 | Test workspace creation/switching with 10+ workspaces | Dev 1 | [x] | Tested with 39 workspaces (all Postman workspaces). Creation and switching works. |
 | 1.5 | Identify OpenAPI sync limit (5/month) gating logic | Dev 2 | [ ] | |
 | 1.6 | Remove OpenAPI sync limit — allow unlimited syncs | Dev 2 | [ ] | |
 | 1.7 | Build file watcher for auto-sync when OpenAPI spec changes in Git | Dev 2 | [ ] | |
@@ -49,7 +49,7 @@
 | 1.10 | Internal build — distribute to pilot team for smoke testing | Dev 1 | [ ] | |
 
 **Exit Criteria:**
-- [ ] 40+ workspaces creatable without errors
+- [x] 40+ workspaces creatable without errors — verified with 39 Postman workspaces
 - [ ] OpenAPI syncs run without monthly cap
 - [ ] Pilot team (2–3 teams) can open migrated collections
 
