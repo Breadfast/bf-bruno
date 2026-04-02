@@ -39,9 +39,20 @@ jobs:
         run: npm run build:web
 
       - name: Build Electron (macOS)
-        run: npm run build:electron:mac
+        run: |
+          # Prepare web build for Electron
+          rm -rf packages/bruno-electron/out packages/bruno-electron/web
+          mkdir packages/bruno-electron/web
+          cp -r packages/bruno-app/dist/* packages/bruno-electron/web
+          sed -i'' -e 's@/static/@static/@g' packages/bruno-electron/web/**.html
+          sed -i'' -e 's@/static/font@../../static/font@g' packages/bruno-electron/web/static/css/**.**.css
+          find packages/bruno-electron/web -name '*.map' -type f -delete
+          # Build
+          cd packages/bruno-electron
+          electron-builder --mac --config electron-builder-config.js --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          CSC_LINK: ""
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -85,7 +96,15 @@ jobs:
         run: npm run build:web
 
       - name: Build Electron (Linux)
-        run: npm run build:electron:linux
+        run: |
+          rm -rf packages/bruno-electron/out packages/bruno-electron/web
+          mkdir packages/bruno-electron/web
+          cp -r packages/bruno-app/dist/* packages/bruno-electron/web
+          sed -i'' -e 's@/static/@static/@g' packages/bruno-electron/web/**.html
+          sed -i'' -e 's@/static/font@../../static/font@g' packages/bruno-electron/web/static/css/**.**.css
+          find packages/bruno-electron/web -name '*.map' -type f -delete
+          cd packages/bruno-electron
+          electron-builder --linux AppImage deb --config electron-builder-config.js --publish never
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -130,7 +149,16 @@ jobs:
         run: npm run build:web
 
       - name: Build Electron (Windows)
-        run: npm run build:electron:win
+        shell: bash
+        run: |
+          rm -rf packages/bruno-electron/out packages/bruno-electron/web
+          mkdir packages/bruno-electron/web
+          cp -r packages/bruno-app/dist/* packages/bruno-electron/web
+          sed -i'' -e 's@/static/@static/@g' packages/bruno-electron/web/**.html
+          sed -i'' -e 's@/static/font@../../static/font@g' packages/bruno-electron/web/static/css/**.**.css
+          find packages/bruno-electron/web -name '*.map' -type f -delete
+          cd packages/bruno-electron
+          npx electron-builder --win --config electron-builder-config.js --publish never
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
