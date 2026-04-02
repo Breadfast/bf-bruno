@@ -529,16 +529,12 @@ const GitUITab = ({ collection }) => {
               <span><span style={{ color: '#58a6ff', fontWeight: 600 }}>&#9632;</span> Incoming</span>
             </div>
 
-            {/* Conflict editor with syntax highlighting */}
-            <div style={{ flex: 1, margin: '0 12px 8px', position: 'relative', minHeight: 300 }}>
-              {/* Highlighted preview (read-only visual layer) */}
+            {/* Conflict editor — highlighted preview + editable textarea */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', margin: '0 12px 8px', gap: 8, minHeight: 0 }}>
+              {/* Read-only highlighted preview */}
               <div
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
+                  flex: 1,
                   padding: 8,
                   fontFamily: 'SF Mono, Monaco, Menlo, Courier New, monospace',
                   fontSize: 12,
@@ -548,13 +544,13 @@ const GitUITab = ({ collection }) => {
                   overflow: 'auto',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-all',
-                  pointerEvents: 'none',
-                  zIndex: 1
+                  minHeight: 150,
+                  maxHeight: 200
                 }}
               >
                 {(() => {
                   const lines = (conflictFiles[activeConflictIndex]?.content || '').split('\n');
-                  let section = 'none'; // 'none' | 'ours' | 'theirs'
+                  let section = 'none';
                   return lines.map((line, i) => {
                     let bg = 'transparent';
                     let color = 'inherit';
@@ -589,29 +585,22 @@ const GitUITab = ({ collection }) => {
                   });
                 })()}
               </div>
-              {/* Actual editable textarea (transparent text, captures input) */}
+              {/* Editable textarea */}
               <textarea
                 value={conflictFiles[activeConflictIndex]?.content || ''}
                 onChange={(e) => updateConflictFileContent(activeConflictIndex, e.target.value)}
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
+                  flex: 1,
                   padding: 8,
                   fontFamily: 'SF Mono, Monaco, Menlo, Courier New, monospace',
                   fontSize: 12,
                   lineHeight: 1.5,
-                  border: '1px solid transparent',
+                  border: '1px solid rgba(128,128,128,0.3)',
                   borderRadius: 4,
                   background: 'transparent',
-                  color: 'transparent',
-                  caretColor: 'inherit',
+                  color: 'inherit',
                   resize: 'none',
-                  zIndex: 2,
-                  width: '100%',
-                  height: '100%'
+                  minHeight: 150
                 }}
               />
             </div>
