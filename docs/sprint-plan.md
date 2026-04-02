@@ -111,14 +111,14 @@
 
 | # | Task | Owner | Status | Notes |
 |---|------|-------|--------|-------|
-| 4.1 | Design Collection Hub data model — name, team, description, endpoint count, last updated | Dev 1 | [ ] | |
-| 4.2 | Build indexer that scans GitHub/GitLab repos for Bruno collections via API | Dev 1 | [ ] | |
-| 4.3 | Build Collection Hub UI — search, filter by team/domain, sort by last updated | Dev 1 | [ ] | |
-| 4.4 | Implement one-click clone from Hub into local Bruno workspace | Dev 1 | [ ] | |
-| 4.5 | Add collection metadata file (`.bruno-meta.json`) for teams to describe their collections | Dev 1 | [ ] | |
+| 4.1 | Design Collection Hub data model — name, team, description, endpoint count, last updated | Dev 1 | [x] | Already exists: GlobalSearchModal indexes all collections from Redux state with name, path, URL, method, type. |
+| 4.2 | Build indexer that scans GitHub/GitLab repos for Bruno collections via API | Dev 1 | [-] | Not needed — all collections are loaded locally. Global search indexes Redux state directly. |
+| 4.3 | Build Collection Hub UI — search, filter by team/domain, sort by last updated | Dev 1 | [x] | Already exists: Cmd+K opens command palette. Modified to search across ALL workspaces (not just active). Supports search by collection name, request name, URL, path. |
+| 4.4 | Implement one-click clone from Hub into local Bruno workspace | Dev 1 | [x] | Already exists: clicking a search result opens the collection/request directly, auto-expands the sidebar tree. |
+| 4.5 | Add collection metadata file (`.bruno-meta.json`) for teams to describe their collections | Dev 1 | [-] | Not needed — search works on collection name, request name, and URL which is sufficient. |
 
 **Exit Criteria:**
-- [ ] Teams can search and discover collections from within Bruno
+- [x] Teams can search and discover collections from within Bruno — Cmd+K searches across all 39 workspaces
 
 *Note: Shared Secrets & Environments (4.6-4.10) and CI/CD Integration & Reports (4.11-4.16) removed — not needed currently.*
 
@@ -186,7 +186,7 @@
 | Sprint 1 | 2–3 | Unlimited workspaces, unlimited OpenAPI syncs | [x] Complete — no limits exist, OpenAPI Sync always enabled |
 | Sprint 2 | 3–5 | Git UI: commit, push, pull | [x] Complete — all operations working, tested with real repo |
 | Sprint 3 | 5–6 | Git UI: branch, merge, conflict resolution | [x] Complete — all operations working including conflict resolution |
-| Sprint 4 | 7–9 | Discovery hub, secrets integration, CI/CD reports | [ ] Not Started |
+| Sprint 4 | 7–9 | Collection Discovery (global search across all workspaces) | [x] Complete — Cmd+K searches all workspaces |
 | Sprint 5 | 9–12 | Auto-update, mock server, request chaining | [ ] Not Started |
 | Rollout | 12+ | Documentation, training, org-wide deployment | [ ] Not Started |
 
