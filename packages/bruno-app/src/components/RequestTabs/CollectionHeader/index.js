@@ -18,7 +18,7 @@ import {
 } from '@tabler/icons';
 import OpenAPISyncIcon from 'components/Icons/OpenAPISync';
 import GitInitModal from 'components/Git/GitInitModal';
-import { setGitRootPath, initCollectionGitState, pushChanges, pullChanges, fetchAndRefresh, switchBranch, loadGitBranches } from 'providers/ReduxStore/slices/git';
+import { setGitRootPath, initCollectionGitState, pushChanges, pullChanges, fetchAndRefresh, switchBranch, loadGitBranches, loadGitData } from 'providers/ReduxStore/slices/git';
 import { switchWorkspace, renameWorkspaceAction, exportWorkspaceAction, confirmWorkspaceCreation, cancelWorkspaceCreation } from 'providers/ReduxStore/slices/workspaces/actions';
 import { updateWorkspace } from 'providers/ReduxStore/slices/workspaces';
 import { showInFolder } from 'providers/ReduxStore/slices/collections/actions';
@@ -87,6 +87,7 @@ const CollectionHeader = ({ collection, isScratchCollection }) => {
       .then((rootPath) => {
         if (rootPath) {
           dispatch(setGitRootPath({ collectionUid: collection.uid, gitRootPath: rootPath }));
+          dispatch(loadGitData(collection.uid, collection.pathname));
         }
       })
       .catch(() => {});
