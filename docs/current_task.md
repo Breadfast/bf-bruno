@@ -102,11 +102,17 @@ No workspace limit exists in the fork codebase. Unlimited workspaces confirmed �
 
 ## Next Task
 
-**Task 0.5** — Import all collections via the new workspace import feature (use the real Postman backup folder with all 39 workspaces).
+**Sprint 2 — Git UI: commit, push, pull** (Impact 10/10, the single biggest feature)
 
-Then continue with:
-- **Task 0.6** — Audit `pm.*` → `bru.*` script translation
-- **Task 0.7** — Fix script translation edge cases
-- **Task 0.8** — Run collection-level test suites to validate parity
+Build a full Git UI panel inside Bruno using `simple-git` (Node.js library):
+- Stage and commit changes
+- Push and pull with SSH key support
+- Branch creation and switching
+- Basic merge conflict resolution UI
 
-Sprint 1 workspace tasks (1.1-1.4) can be marked done since no limit exists and workspace import is built.
+See Sprint 2 tasks (2.1-2.10) in `docs/sprint-plan.md` for the full breakdown.
+
+**Deferred tasks** (operational, not dev work):
+- Task 0.6-0.7 — Script translation audit (depends on team running through collections)
+- Task 0.8-0.10 — Validation, Git push, documentation
+- Task 1.5-1.8 — OpenAPI sync limit removal (can be done in parallel)
