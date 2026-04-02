@@ -8,7 +8,7 @@ const CollectionSearch = ({ searchText, setSearchText }) => {
       <input
         type="text"
         name="search"
-        placeholder="Search requests..."
+        placeholder="Search by name or URL..."
         id="search"
         autoComplete="off"
         autoCorrect="off"
