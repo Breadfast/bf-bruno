@@ -519,91 +519,30 @@ const GitUITab = ({ collection }) => {
               {conflictFiles[activeConflictIndex]?.path}
             </div>
 
-            {/* Editor hint with color legend */}
-            <div style={{ padding: '0 12px 8px', fontSize: 11, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-              <span style={{ color: '#d29922' }}>Edit the file below — remove conflict markers and keep the content you want:</span>
-            </div>
-            <div style={{ padding: '0 12px 8px', fontSize: 10, display: 'flex', gap: 12 }}>
-              <span><span style={{ color: '#2ea043', fontWeight: 600 }}>&#9632;</span> Current (HEAD)</span>
-              <span><span style={{ color: '#d29922', fontWeight: 600 }}>&#9632;</span> Separator</span>
-              <span><span style={{ color: '#58a6ff', fontWeight: 600 }}>&#9632;</span> Incoming</span>
+            {/* Editor hint */}
+            <div style={{ padding: '0 12px 8px', fontSize: 11, color: '#d29922' }}>
+              Remove conflict markers (&lt;&lt;&lt;&lt;&lt;&lt;&lt;, =======, &gt;&gt;&gt;&gt;&gt;&gt;&gt;) and keep the content you want.
             </div>
 
-            {/* Conflict editor — highlighted preview + editable textarea */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', margin: '0 12px 8px', gap: 8, minHeight: 0 }}>
-              {/* Read-only highlighted preview */}
-              <div
-                style={{
-                  flex: 1,
-                  padding: 8,
-                  fontFamily: 'SF Mono, Monaco, Menlo, Courier New, monospace',
-                  fontSize: 12,
-                  lineHeight: 1.5,
-                  border: '1px solid rgba(128,128,128,0.3)',
-                  borderRadius: 4,
-                  overflow: 'auto',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-all',
-                  minHeight: 150,
-                  maxHeight: 200
-                }}
-              >
-                {(() => {
-                  const lines = (conflictFiles[activeConflictIndex]?.content || '').split('\n');
-                  let section = 'none';
-                  return lines.map((line, i) => {
-                    let bg = 'transparent';
-                    let color = 'inherit';
-                    let fontWeight = 'normal';
-
-                    if (line.startsWith('<<<<<<<')) {
-                      section = 'ours';
-                      bg = 'rgba(46, 160, 67, 0.2)';
-                      color = '#2ea043';
-                      fontWeight = 600;
-                    } else if (line.startsWith('=======')) {
-                      section = 'theirs';
-                      bg = 'rgba(210, 153, 34, 0.2)';
-                      color = '#d29922';
-                      fontWeight = 600;
-                    } else if (line.startsWith('>>>>>>>')) {
-                      section = 'none';
-                      bg = 'rgba(88, 166, 255, 0.2)';
-                      color = '#58a6ff';
-                      fontWeight = 600;
-                    } else if (section === 'ours') {
-                      bg = 'rgba(46, 160, 67, 0.08)';
-                    } else if (section === 'theirs') {
-                      bg = 'rgba(88, 166, 255, 0.08)';
-                    }
-
-                    return (
-                      <div key={i} style={{ background: bg, color, fontWeight, margin: '0 -8px', padding: '0 8px' }}>
-                        {line || '\u00A0'}
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
-              {/* Editable textarea */}
-              <textarea
-                value={conflictFiles[activeConflictIndex]?.content || ''}
-                onChange={(e) => updateConflictFileContent(activeConflictIndex, e.target.value)}
-                style={{
-                  flex: 1,
-                  padding: 8,
-                  fontFamily: 'SF Mono, Monaco, Menlo, Courier New, monospace',
-                  fontSize: 12,
-                  lineHeight: 1.5,
-                  border: '1px solid rgba(128,128,128,0.3)',
-                  borderRadius: 4,
-                  background: 'transparent',
-                  color: 'inherit',
-                  resize: 'none',
-                  minHeight: 150
-                }}
-              />
-            </div>
+            {/* Single editable textarea */}
+            <textarea
+              value={conflictFiles[activeConflictIndex]?.content || ''}
+              onChange={(e) => updateConflictFileContent(activeConflictIndex, e.target.value)}
+              style={{
+                flex: 1,
+                margin: '0 12px 8px',
+                padding: 8,
+                fontFamily: 'SF Mono, Monaco, Menlo, Courier New, monospace',
+                fontSize: 12,
+                lineHeight: 1.5,
+                border: '1px solid rgba(128,128,128,0.3)',
+                borderRadius: 4,
+                background: 'transparent',
+                color: 'inherit',
+                resize: 'none',
+                minHeight: 300
+              }}
+            />
 
             {/* Merge commit message */}
             <div style={{ padding: '0 12px 8px' }}>
