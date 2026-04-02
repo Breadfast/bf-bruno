@@ -138,30 +138,10 @@
 | 5.4 | Set up Chocolatey internal feed for Windows distribution | Dev 1 | [ ] | |
 | 5.5 | Test auto-update flow end-to-end on all 3 platforms | Dev 1 | [ ] | |
 
-### Mock Server
-
-| # | Task | Owner | Status | Notes |
-|---|------|-------|--------|-------|
-| 5.6 | Build mock server that reads Bruno collection response examples | Dev 2 | [ ] | |
-| 5.7 | Implement route matching (method + URL pattern) | Dev 2 | [ ] | |
-| 5.8 | Add response delay simulation | Dev 2 | [ ] | |
-| 5.9 | Add start/stop mock server UI in Bruno | Dev 2 | [ ] | |
-| 5.10 | Test mock server with 3 different collections | Dev 2 | [ ] | |
-
-### Request Chaining & Workflows
-
-| # | Task | Owner | Status | Notes |
-|---|------|-------|--------|-------|
-| 5.11 | Define YAML workflow schema — execution order, variable extraction, conditionals | Dev 1 | [ ] | |
-| 5.12 | Build workflow runner that executes requests sequentially per schema | Dev 1 | [ ] | |
-| 5.13 | Implement auto-extract tokens from response → inject into next request | Dev 1 | [ ] | |
-| 5.14 | Implement conditional skip (skip request if previous failed) | Dev 1 | [ ] | |
-| 5.15 | Test workflows with real multi-step API flows (e.g., login → create → verify) | Both | [ ] | |
-
 **Exit Criteria:**
 - [ ] Fork auto-updates on all 3 platforms
-- [ ] Mock server serves collection examples on localhost
-- [ ] Workflow runner chains requests with variable passing
+
+*Note: Mock Server (5.6-5.10) and Request Chaining & Workflows (5.11-5.15) removed — not needed currently.*
 
 ---
 
@@ -187,7 +167,7 @@
 | Sprint 2 | 3–5 | Git UI: commit, push, pull | [x] Complete — all operations working, tested with real repo |
 | Sprint 3 | 5–6 | Git UI: branch, merge, conflict resolution | [x] Complete — all operations working including conflict resolution |
 | Sprint 4 | 7–9 | Collection Discovery (global search across all workspaces) | [x] Complete — Cmd+K searches all workspaces |
-| Sprint 5 | 9–12 | Auto-update, mock server, request chaining | [ ] Not Started |
+| Sprint 5 | 9–12 | Auto-update & distribution | [ ] Not Started |
 | Rollout | 12+ | Documentation, training, org-wide deployment | [ ] Not Started |
 
 **Total Tasks:** 71
