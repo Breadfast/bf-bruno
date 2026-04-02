@@ -33,14 +33,8 @@ const GlobalSearchModal = ({ isOpen, onClose }) => {
 
   const activeWorkspace = workspaces.find((w) => w.uid === activeWorkspaceUid);
 
-  const collections = useMemo(() => {
-    if (!activeWorkspace) return allCollections;
-
-    const workspacePaths = new Set(
-      activeWorkspace.collections?.map((wc) => normalizePath(wc.path)) || []
-    );
-    return allCollections.filter((c) => workspacePaths.has(normalizePath(c.pathname)));
-  }, [activeWorkspace, allCollections, workspaces]);
+  // Search across ALL collections in ALL workspaces, not just the active workspace
+  const collections = allCollections;
 
   const createCollectionResults = () => {
     const collectionResults = collections.map((collection) => ({
@@ -387,7 +381,7 @@ const GlobalSearchModal = ({ isOpen, onClose }) => {
               <input
                 ref={inputRef}
                 type="text"
-                placeholder="Search collections, requests, or documentation..."
+                placeholder="Search across all workspaces — collections, requests, URLs..."
                 value={query}
                 onChange={handleQueryChange}
                 onKeyDown={handleKeyNavigation}
