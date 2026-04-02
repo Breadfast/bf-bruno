@@ -91,8 +91,7 @@ const SpecialTab = ({ handleCloseClick, type, tabName, handleDoubleClick, hasDra
         return (
           <>
             <OpenAPISyncIcon size={14} className="special-tab-icon flex-shrink-0" />
-            <span className="ml-1 tab-name mr-1">OpenAPI</span>
-            <StatusBadge status="info" size="xs">Beta</StatusBadge>
+            <span className="ml-1 tab-name">OpenAPI Sync</span>
           </>
         );
       }

@@ -253,7 +253,7 @@ const CollectionHeader = ({ collection, isScratchCollection }) => {
   const overflowMenuItems = [
     { id: 'variables', label: 'Variables', leftSection: IconEye, onClick: viewVariables },
     ...(isOpenAPISyncEnabled && !hasOpenApiSyncConfigured
-      ? [{ id: 'openapi-sync', label: 'OpenAPI', leftSection: OpenAPISyncIcon, rightSection: <StatusBadge status="info" size="xs">Beta</StatusBadge>, onClick: viewOpenApiSync }]
+      ? [{ id: 'openapi-sync', label: 'OpenAPI Sync', leftSection: OpenAPISyncIcon, onClick: viewOpenApiSync }]
       : []),
     { id: 'collection-settings', label: 'Collection Settings', leftSection: IconSettings, onClick: viewCollectionSettings }
   ];
