@@ -10,8 +10,7 @@
 
 ---
 
-**Sprint:** 0 — Setup & Pre-Migration
-**Task:** 0.3 + Workspace Import — Build Postman import features
+**Sprint:** 2 + 3 — Git UI
 **Status:** Completed
 **Owner:** Dev 1
 **Started:** 2026-04-02
@@ -21,98 +20,100 @@
 
 ## What Was Built
 
-### Feature 1: Postman Data Dump ZIP Import (Task 0.3)
+### Full Git UI — matching Bruno Pro pattern
 
-Import a Postman data export ZIP file (exported from Postman Settings → Data → Export Data) directly through Bruno's collection import dialog. Equivalent to the Bruno Ultimate edition feature.
-
-**How it works:**
-1. User opens Import Collection → drops/selects a Postman data dump ZIP
-2. Bruno detects it's a Postman dump (not a Bruno ZIP), extracts all collections and environments
-3. Converts via `postmanToBruno()` and `postmanToBrunoEnvironment()`
-4. Routes to existing `BulkImportCollectionLocation` UI for selection, environment assignment, and import
-
-**Files changed:**
-| File | Change |
-|---|---|
-| `packages/bruno-electron/src/ipc/collection.js` | Added `postmanToBrunoEnvironment` import, `renderer:is-postman-dump-zip` handler, `renderer:extract-postman-dump-zip` handler |
-| `packages/bruno-app/src/components/Sidebar/ImportCollection/FileTab.js` | Added Postman dump ZIP detection branch in `processZipFile()`, updated help text |
-| `packages/bruno-electron/src/utils/tests/postman-dump-import.spec.js` | New — 7 tests for detection and extraction |
-
-### Feature 2: Postman Workspace Folder Import
-
-Import an entire Postman backup folder structure (organized by workspace) into Bruno — creating one Bruno workspace per Postman workspace, with all collections and environments inside each.
-
-**How it works:**
-1. User opens Import Workspace → clicks "Postman Backup" tab
-2. Selects the `postman_backups/` root folder
-3. Bruno scans subfolders, shows each as a workspace with collection/environment counts
-4. User selects which workspaces to import and picks a target location
-5. For each workspace: creates Bruno workspace, converts and writes collections + environments
-6. Duplicate workspaces are skipped (shows "Already exists" with yellow indicator)
-
-**Postman backup folder structure:**
-```
-postman_backups/
-├── Food aggregator/
-│   ├── collections/
-│   │   ├── Delivery Zone API_uuid.json    ← { collection: { info: ..., item: [...] } }
-│   │   └── ...
-│   ├── environments/
-│   │   ├── Integration_uuid.json          ← { environment: { id, name, values: [...] } }
-│   │   └── ...
-│   └── *.json                             ← root-level duplicates (ignored, we use collections/)
-├── Breadfast/
-│   ├── collections/
-│   └── environments/
-└── ... (40 workspaces)
-```
-
-Key discovery: backup files wrap data in `{ collection: { ... } }` and `{ environment: { ... } }` — must unwrap before converting.
-
-**Files changed:**
-| File | Change |
-|---|---|
-| `packages/bruno-electron/src/ipc/workspace.js` | Added `postmanToBruno`/`postmanToBrunoEnvironment` imports, `renderer:scan-postman-backup-folder` handler, `renderer:import-postman-workspaces` handler with full collection/environment write pipeline, duplicate workspace skip logic |
-| `packages/bruno-app/src/components/WorkspaceSidebar/ImportWorkspace/index.js` | Rewritten with two tabs (Bruno Workspace / Postman Backup), folder picker, workspace scanning/selection UI, import progress with success/error/skipped states |
+A complete Git integration built into the fork, equivalent to the Bruno Pro/Ultimate Git features. The entire Git backend (1,814 lines, 45+ functions) was already implemented in `utils/git.js` by the upstream Bruno codebase — our work was wiring it to IPC handlers and building the UI.
 
 ---
 
-## Verification Results
+### Architecture
 
-- **Tested with real data:** 39 Postman workspaces, 554 collections, 218 environments
-- **All workspaces created** with correct names, collections, and environments
-- **Requests visible** in Bruno UI with correct URLs, methods, headers, bodies
-- **Duplicate workspace skip** works — re-importing shows "Already exists"
+**Backend (Electron main process):**
+- 38 IPC handlers in `packages/bruno-electron/src/ipc/git.js` — all wired to existing `utils/git.js` functions
+- Covers: status, stage/unstage/discard, commit, push/pull/fetch, branches, logs, stash, diffs, conflict resolution, remotes, init
+- `resolveGitRoot()` helper — translates collection paths to git root paths
+- New handler: `renderer:git-read-conflicted-file` for reading conflict marker content
+
+**State (Redux):**
+- New `slices/git.js` — per-collection git state (branch, status, staged/unstaged files, logs, stashes, ahead/behind, active diff, commit message)
+- 15 reducers + 20 async thunks wrapping IPC calls
+- Registered in Redux store
+
+**UI (React):**
+
+| Component | Description |
+|---|---|
+| **Branch pill** in CollectionHeader | Shows current branch name, clickable dropdown with: Create New Branch, Checkout Branch, Push, Pull, Git UI |
+| **Git UI tab** | Opens as a tab (like request tabs) with orange Git icon — matches Bruno Pro pattern |
+| **Changes sub-tab** | Staged/unstaged/conflicted file lists with stage (+), unstage (−), discard (↩) buttons per file. "Commit Changes" button opens commit modal |
+| **Commits sub-tab** | Commit history with author, hash, date, insertions/deletions |
+| **Stash sub-tab** | Create stash (with optional message), apply/drop stashes |
+| **Commit modal** | "COMMIT COLLECTION CHANGES" modal with commit message textarea — matches Bruno Pro |
+| **Checkout Branch modal** | Lists all local branches, click to switch. Current branch shown with checkmark |
+| **Create New Branch modal** | Branch name input + Create button |
+| **Git Init modal** | "Initialize Git Repository" prompt for collections not in a git repo — matches Bruno free version |
+| **Conflict resolution modal** | Per-file editor to resolve merge conflicts. Disabled "Resolve & Continue Merge" until all conflict markers removed |
+| **Loading indicator** | "Processing..." bar during git operations |
+| **Auto-refresh** | Git status refreshes every 5 seconds and on collection tree updates |
+
+**Bug fix:**
+- `collection-watcher.js` — skip files with git conflict markers (`<<<<<<<`, `>>>>>>>`) to prevent YAML parser crash when merge conflicts exist on disk
+
+---
+
+### Files Created
+
+| File | Description |
+|---|---|
+| `packages/bruno-app/src/providers/ReduxStore/slices/git.js` | Redux slice — per-collection git state, 15 reducers, 20 async thunks |
+| `packages/bruno-app/src/components/Git/GitUITab/index.js` | Git UI tab content — Changes/Commits/Stash sub-tabs, commit modal, conflict resolver |
+| `packages/bruno-app/src/components/Git/GitUITab/StyledWrapper.js` | Styled components for Git UI tab |
+| `packages/bruno-app/src/components/Git/GitPanel/index.js` | (Legacy side-panel — replaced by tab approach but kept for reference) |
+| `packages/bruno-app/src/components/Git/GitPanel/StyledWrapper.js` | (Legacy) |
+| `packages/bruno-app/src/components/Git/GitInitModal/index.js` | Git init modal for non-git collections |
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `packages/bruno-electron/src/ipc/git.js` | Expanded from 22 → 300+ lines. 38 IPC handlers wired to existing utils/git.js functions |
+| `packages/bruno-app/src/components/RequestTabs/CollectionHeader/index.js` | Added branch pill, dropdown menu (Push/Pull/Checkout/Create Branch/Git UI), git root detection on mount, Git Init modal, Checkout/Create branch modals |
+| `packages/bruno-app/src/components/RequestTabs/RequestTab/SpecialTab.js` | Added `git-ui` tab type with orange GitBranch icon |
+| `packages/bruno-app/src/components/RequestTabs/RequestTab/index.js` | Added `git-ui` to specialTabs array |
+| `packages/bruno-app/src/components/RequestTabPanel/index.js` | Added `git-ui` tab type rendering to GitUITab |
+| `packages/bruno-app/src/providers/ReduxStore/slices/tabs.js` | Added `git-ui` to nonReplaceableTabTypes |
+| `packages/bruno-app/src/providers/ReduxStore/index.js` | Registered git reducer |
+| `packages/bruno-electron/src/app/collection-watcher.js` | Added conflict marker guards in `add` and `change` handlers to prevent parser crash |
+
+---
+
+### Verification
+
+- **Tested with real repo** — 39 workspaces, 554 collections via SSH (github.bf:Breadfast/bruno-api.git)
+- **Stage/commit/push/pull** — all working
+- **Branch create/switch** — working
+- **Stash create/apply/drop** — working
+- **Conflict resolution** — merge conflict detected, resolver modal works, continue merge works
 - **All 25 test suites pass** (245 tests, 0 failures)
 
 ---
 
-## Also Completed During This Sprint
+## Completed Sprints Summary
 
-### Task 0.1 — CI Pipeline (2026-04-01)
-Verified upstream CI workflows are comprehensive. No new workflow needed.
-
-### Task 0.2 — Postman Export (pre-existing)
-Data dump ZIP and backup folder already available.
-
-### Sprint 1 Tasks 1.1-1.2 — Workspace Limit (verified 2026-04-02)
-No workspace limit exists in the fork codebase. Unlimited workspaces confirmed — tested with 40+.
+| Sprint | Status | Key Deliverables |
+|---|---|---|
+| Sprint 0 | ~80% done | CI verified, Postman import (ZIP + workspace folder), 554 collections imported. Audit/validation deferred. |
+| Sprint 1 | ~40% done | Workspace limits done (no limit exists). OpenAPI sync limit remaining. |
+| Sprint 2 | Complete | Full Git UI: stage, commit, push, pull, fetch, text diff, error handling |
+| Sprint 3 | Complete | Branch create/switch, stash, conflict resolution, auto-refresh, git init |
 
 ---
 
-## Next Task
+## Next Steps
 
-**Sprint 2 — Git UI: commit, push, pull** (Impact 10/10, the single biggest feature)
+Remaining work from the roadmap:
 
-Build a full Git UI panel inside Bruno using `simple-git` (Node.js library):
-- Stage and commit changes
-- Push and pull with SSH key support
-- Branch creation and switching
-- Basic merge conflict resolution UI
-
-See Sprint 2 tasks (2.1-2.10) in `docs/sprint-plan.md` for the full breakdown.
-
-**Deferred tasks** (operational, not dev work):
-- Task 0.6-0.7 — Script translation audit (depends on team running through collections)
-- Task 0.8-0.10 — Validation, Git push, documentation
-- Task 1.5-1.8 — OpenAPI sync limit removal (can be done in parallel)
+- **Sprint 1.5-1.8** — Remove OpenAPI sync limit (5/month → unlimited)
+- **Sprint 4** — Collection Discovery Hub, Shared Secrets, CI/CD reports
+- **Sprint 5** — Auto-update & distribution, Mock Server, Request chaining
+- **Operational** — Tasks 0.6-0.10 (script translation audit, validation, documentation)
