@@ -10,110 +10,84 @@
 
 ---
 
-**Sprint:** 2 + 3 — Git UI
-**Status:** Completed
-**Owner:** Dev 1
-**Started:** 2026-04-02
-**Completed:** 2026-04-02
+**Status:** All development sprints complete. Ready for pilot rollout.
 
 ---
 
-## What Was Built
+## Completed Work Summary
 
-### Full Git UI — matching Bruno Pro pattern
+All feature development is done. 5 of 12 feature gaps from the original analysis are fully closed. The fork is ready for pilot team testing.
 
-A complete Git integration built into the fork, equivalent to the Bruno Pro/Ultimate Git features. The entire Git backend (1,814 lines, 45+ functions) was already implemented in `utils/git.js` by the upstream Bruno codebase — our work was wiring it to IPC handlers and building the UI.
+### Sprints Completed
 
----
-
-### Architecture
-
-**Backend (Electron main process):**
-- 38 IPC handlers in `packages/bruno-electron/src/ipc/git.js` — all wired to existing `utils/git.js` functions
-- Covers: status, stage/unstage/discard, commit, push/pull/fetch, branches, logs, stash, diffs, conflict resolution, remotes, init
-- `resolveGitRoot()` helper — translates collection paths to git root paths
-- New handler: `renderer:git-read-conflicted-file` for reading conflict marker content
-
-**State (Redux):**
-- New `slices/git.js` — per-collection git state (branch, status, staged/unstaged files, logs, stashes, ahead/behind, active diff, commit message)
-- 15 reducers + 20 async thunks wrapping IPC calls
-- Registered in Redux store
-
-**UI (React):**
-
-| Component | Description |
+| Sprint | What Was Built |
 |---|---|
-| **Branch pill** in CollectionHeader | Shows current branch name, clickable dropdown with: Create New Branch, Checkout Branch, Push, Pull, Git UI |
-| **Git UI tab** | Opens as a tab (like request tabs) with orange Git icon — matches Bruno Pro pattern |
-| **Changes sub-tab** | Staged/unstaged/conflicted file lists with stage (+), unstage (−), discard (↩) buttons per file. "Commit Changes" button opens commit modal |
-| **Commits sub-tab** | Commit history with author, hash, date, insertions/deletions |
-| **Stash sub-tab** | Create stash (with optional message), apply/drop stashes |
-| **Commit modal** | "COMMIT COLLECTION CHANGES" modal with commit message textarea — matches Bruno Pro |
-| **Checkout Branch modal** | Lists all local branches, click to switch. Current branch shown with checkmark |
-| **Create New Branch modal** | Branch name input + Create button |
-| **Git Init modal** | "Initialize Git Repository" prompt for collections not in a git repo — matches Bruno free version |
-| **Conflict resolution modal** | Per-file editor to resolve merge conflicts. Disabled "Resolve & Continue Merge" until all conflict markers removed |
-| **Loading indicator** | "Processing..." bar during git operations |
-| **Auto-refresh** | Git status refreshes every 5 seconds and on collection tree updates |
+| **Sprint 0** | CI verified (existing workflows). Postman Data Dump ZIP import. Postman Workspace Folder import (39 workspaces, 554 collections, 218 environments). |
+| **Sprint 1** | No workspace limit exists (unlimited confirmed). OpenAPI Sync graduated from beta to always enabled (no sync limit exists). |
+| **Sprint 2** | Full Git UI: 38 IPC handlers, Redux state, branch pill in header, Git UI tab (Changes/Commits/Stash), stage/unstage/discard, commit modal, push/pull/fetch. |
+| **Sprint 3** | Branch create/switch modals, stash management, merge conflict resolution (auto-detect + per-file editor), auto-refresh, file watcher crash fix for conflict markers. |
+| **Sprint 4** | Global search (Cmd+K) extended to search across ALL workspaces. Sidebar search improved to match URLs in addition to names. |
 
-**Bug fix:**
-- `collection-watcher.js` — skip files with git conflict markers (`<<<<<<<`, `>>>>>>>`) to prevent YAML parser crash when merge conflicts exist on disk
+### Feature Gaps Closed
 
----
+| # | Feature Gap | Impact | Status |
+|---|---|---|---|
+| 1 | Git UI: Commit, Push, Branch & Merge | 10/10 | **Closed** |
+| 2 | Workspace Management (Beyond 2) | 9/10 | **Closed** — no limit exists |
+| 3 | Bulk Postman Import & Migration | 9/10 | **Closed** |
+| 4 | Collection Discovery / Search | 9/10 | **Closed** — Cmd+K + sidebar URL search |
+| 9 | OpenAPI Sync (Beyond 5/month) | 7/10 | **Closed** — no limit, always enabled |
 
-### Files Created
+### Feature Gaps Not Needed (Removed)
 
-| File | Description |
-|---|---|
-| `packages/bruno-app/src/providers/ReduxStore/slices/git.js` | Redux slice — per-collection git state, 15 reducers, 20 async thunks |
-| `packages/bruno-app/src/components/Git/GitUITab/index.js` | Git UI tab content — Changes/Commits/Stash sub-tabs, commit modal, conflict resolver |
-| `packages/bruno-app/src/components/Git/GitUITab/StyledWrapper.js` | Styled components for Git UI tab |
-| `packages/bruno-app/src/components/Git/GitPanel/index.js` | (Legacy side-panel — replaced by tab approach but kept for reference) |
-| `packages/bruno-app/src/components/Git/GitPanel/StyledWrapper.js` | (Legacy) |
-| `packages/bruno-app/src/components/Git/GitInitModal/index.js` | Git init modal for non-git collections |
-
-### Files Modified
-
-| File | Change |
-|---|---|
-| `packages/bruno-electron/src/ipc/git.js` | Expanded from 22 → 300+ lines. 38 IPC handlers wired to existing utils/git.js functions |
-| `packages/bruno-app/src/components/RequestTabs/CollectionHeader/index.js` | Added branch pill, dropdown menu (Push/Pull/Checkout/Create Branch/Git UI), git root detection on mount, Git Init modal, Checkout/Create branch modals |
-| `packages/bruno-app/src/components/RequestTabs/RequestTab/SpecialTab.js` | Added `git-ui` tab type with orange GitBranch icon |
-| `packages/bruno-app/src/components/RequestTabs/RequestTab/index.js` | Added `git-ui` to specialTabs array |
-| `packages/bruno-app/src/components/RequestTabPanel/index.js` | Added `git-ui` tab type rendering to GitUITab |
-| `packages/bruno-app/src/providers/ReduxStore/slices/tabs.js` | Added `git-ui` to nonReplaceableTabTypes |
-| `packages/bruno-app/src/providers/ReduxStore/index.js` | Registered git reducer |
-| `packages/bruno-electron/src/app/collection-watcher.js` | Added conflict marker guards in `add` and `change` handlers to prevent parser crash |
-
----
-
-### Verification
-
-- **Tested with real repo** — 39 workspaces, 554 collections via SSH (github.bf:Breadfast/bruno-api.git)
-- **Stage/commit/push/pull** — all working
-- **Branch create/switch** — working
-- **Stash create/apply/drop** — working
-- **Conflict resolution** — merge conflict detected, resolver modal works, continue merge works
-- **All 25 test suites pass** (245 tests, 0 failures)
-
----
-
-## Completed Sprints Summary
-
-| Sprint | Status | Key Deliverables |
+| # | Feature Gap | Reason |
 |---|---|---|
-| Sprint 0 | ~80% done | CI verified, Postman import (ZIP + workspace folder), 554 collections imported. Audit/validation deferred. |
-| Sprint 1 | ~40% done | Workspace limits done (no limit exists). OpenAPI sync limit remaining. |
-| Sprint 2 | Complete | Full Git UI: stage, commit, push, pull, fetch, text diff, error handling |
-| Sprint 3 | Complete | Branch create/switch, stash, conflict resolution, auto-refresh, git init |
+| 5 | Shared Secrets & Environments | Not needed currently |
+| 6 | Collection Runner Reports | Not needed currently |
+| 7 | CI/CD Pipeline Integration | Not needed currently (existing upstream CI is sufficient) |
+| 8 | Mock Server | Not needed currently |
+| 11 | Request Chaining & Workflows | Not needed currently |
+| 12 | SSO / SCIM | Not applicable (offline-first, no user accounts) |
+
+### Remaining Work
+
+| Item | Type | Priority |
+|---|---|---|
+| Sprint 5: Auto-Update & Distribution | DevOps/Infrastructure | When ready to roll out to 200 developers |
+| Org-Wide Rollout (R.1-R.6) | Operational | Documentation, training, phased deployment |
+| Pilot team testing | Operational | Collect feedback, identify issues |
 
 ---
 
-## Next Steps
+## Files Changed Across All Sprints
 
-Remaining work from the roadmap:
+### New Files Created
+- `packages/bruno-app/src/providers/ReduxStore/slices/git.js` — Git Redux slice
+- `packages/bruno-app/src/components/Git/GitUITab/index.js` — Git UI tab
+- `packages/bruno-app/src/components/Git/GitUITab/StyledWrapper.js`
+- `packages/bruno-app/src/components/Git/GitPanel/index.js` — Git panel (legacy, kept for reference)
+- `packages/bruno-app/src/components/Git/GitPanel/StyledWrapper.js`
+- `packages/bruno-app/src/components/Git/GitInitModal/index.js` — Git init modal
+- `packages/bruno-electron/src/utils/tests/postman-dump-import.spec.js` — Postman dump tests
 
-- **Sprint 1.5-1.8** — Remove OpenAPI sync limit (5/month → unlimited)
-- **Sprint 4** — Collection Discovery Hub, Shared Secrets, CI/CD reports
-- **Sprint 5** — Auto-update & distribution, Mock Server, Request chaining
-- **Operational** — Tasks 0.6-0.10 (script translation audit, validation, documentation)
+### Modified Files
+- `packages/bruno-electron/src/ipc/git.js` — 38 IPC handlers (was 22 lines, now 300+)
+- `packages/bruno-electron/src/ipc/collection.js` — Postman dump ZIP detection/extraction handlers
+- `packages/bruno-electron/src/ipc/workspace.js` — Postman workspace folder import handlers
+- `packages/bruno-electron/src/app/collection-watcher.js` — Conflict marker crash fix
+- `packages/bruno-app/src/components/RequestTabs/CollectionHeader/index.js` — Branch pill, Git dropdown, modals
+- `packages/bruno-app/src/components/RequestTabs/RequestTab/SpecialTab.js` — Git UI tab type
+- `packages/bruno-app/src/components/RequestTabs/RequestTab/index.js` — Git UI tab in specialTabs
+- `packages/bruno-app/src/components/RequestTabPanel/index.js` — Git UI tab rendering
+- `packages/bruno-app/src/components/Sidebar/ImportCollection/FileTab.js` — Postman dump ZIP detection
+- `packages/bruno-app/src/components/WorkspaceSidebar/ImportWorkspace/index.js` — Postman backup folder import
+- `packages/bruno-app/src/components/GlobalSearchModal/index.js` — Search all workspaces
+- `packages/bruno-app/src/utils/collections/search.js` — Sidebar search matches URLs
+- `packages/bruno-app/src/utils/beta-features.js` — OpenAPI Sync always enabled
+- `packages/bruno-app/src/providers/ReduxStore/index.js` — Git reducer registered
+- `packages/bruno-app/src/providers/ReduxStore/slices/tabs.js` — Git UI tab type
+
+### Test Results
+- All 25 `bruno-electron` test suites pass (245 tests)
+- All 34 `bruno-app` test suites pass (770 tests)
+- 7 new Postman dump import tests
