@@ -81,6 +81,29 @@ const GitUITab = ({ collection }) => {
     }
   }, [collectionUid, collectionPath]);
 
+  // Auto-refresh git status when collection files change
+  useEffect(() => {
+    if (!collectionUid || !collectionPath) return;
+    const { ipcRenderer } = window;
+    if (!ipcRenderer) return;
+
+    const handleCollectionChanged = () => {
+      dispatch(loadGitData(collectionUid, collectionPath));
+    };
+
+    const unsubscribe = ipcRenderer.on('main:collection-tree-updated', handleCollectionChanged);
+
+    // Also poll every 5 seconds as fallback (for external git operations like merge)
+    const interval = setInterval(() => {
+      dispatch(loadGitData(collectionUid, collectionPath));
+    }, 5000);
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+      clearInterval(interval);
+    };
+  }, [collectionUid, collectionPath]);
+
   useEffect(() => {
     if (activeTab === 'commits') {
       dispatch(loadGitLogs(collectionUid, collectionPath));
@@ -496,30 +519,102 @@ const GitUITab = ({ collection }) => {
               {conflictFiles[activeConflictIndex]?.path}
             </div>
 
-            {/* Editor hint */}
-            <div style={{ padding: '0 12px 4px', fontSize: 11, color: '#d29922' }}>
-              Remove conflict markers (&lt;&lt;&lt;&lt;&lt;&lt;&lt;, =======, &gt;&gt;&gt;&gt;&gt;&gt;&gt;) and keep the content you want.
+            {/* Editor hint with color legend */}
+            <div style={{ padding: '0 12px 8px', fontSize: 11, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              <span style={{ color: '#d29922' }}>Edit the file below — remove conflict markers and keep the content you want:</span>
+            </div>
+            <div style={{ padding: '0 12px 8px', fontSize: 10, display: 'flex', gap: 12 }}>
+              <span><span style={{ color: '#2ea043', fontWeight: 600 }}>&#9632;</span> Current (HEAD)</span>
+              <span><span style={{ color: '#d29922', fontWeight: 600 }}>&#9632;</span> Separator</span>
+              <span><span style={{ color: '#58a6ff', fontWeight: 600 }}>&#9632;</span> Incoming</span>
             </div>
 
-            {/* Textarea editor */}
-            <textarea
-              value={conflictFiles[activeConflictIndex]?.content || ''}
-              onChange={(e) => updateConflictFileContent(activeConflictIndex, e.target.value)}
-              style={{
-                flex: 1,
-                margin: '0 12px 8px',
-                padding: 8,
-                fontFamily: 'SF Mono, Monaco, Menlo, Courier New, monospace',
-                fontSize: 12,
-                lineHeight: 1.5,
-                border: '1px solid rgba(128,128,128,0.3)',
-                borderRadius: 4,
-                background: 'transparent',
-                color: 'inherit',
-                resize: 'none',
-                minHeight: 300
-              }}
-            />
+            {/* Conflict editor with syntax highlighting */}
+            <div style={{ flex: 1, margin: '0 12px 8px', position: 'relative', minHeight: 300 }}>
+              {/* Highlighted preview (read-only visual layer) */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  padding: 8,
+                  fontFamily: 'SF Mono, Monaco, Menlo, Courier New, monospace',
+                  fontSize: 12,
+                  lineHeight: 1.5,
+                  border: '1px solid rgba(128,128,128,0.3)',
+                  borderRadius: 4,
+                  overflow: 'auto',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                  pointerEvents: 'none',
+                  zIndex: 1
+                }}
+              >
+                {(() => {
+                  const lines = (conflictFiles[activeConflictIndex]?.content || '').split('\n');
+                  let section = 'none'; // 'none' | 'ours' | 'theirs'
+                  return lines.map((line, i) => {
+                    let bg = 'transparent';
+                    let color = 'inherit';
+                    let fontWeight = 'normal';
+
+                    if (line.startsWith('<<<<<<<')) {
+                      section = 'ours';
+                      bg = 'rgba(46, 160, 67, 0.2)';
+                      color = '#2ea043';
+                      fontWeight = 600;
+                    } else if (line.startsWith('=======')) {
+                      section = 'theirs';
+                      bg = 'rgba(210, 153, 34, 0.2)';
+                      color = '#d29922';
+                      fontWeight = 600;
+                    } else if (line.startsWith('>>>>>>>')) {
+                      section = 'none';
+                      bg = 'rgba(88, 166, 255, 0.2)';
+                      color = '#58a6ff';
+                      fontWeight = 600;
+                    } else if (section === 'ours') {
+                      bg = 'rgba(46, 160, 67, 0.08)';
+                    } else if (section === 'theirs') {
+                      bg = 'rgba(88, 166, 255, 0.08)';
+                    }
+
+                    return (
+                      <div key={i} style={{ background: bg, color, fontWeight, margin: '0 -8px', padding: '0 8px' }}>
+                        {line || '\u00A0'}
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+              {/* Actual editable textarea (transparent text, captures input) */}
+              <textarea
+                value={conflictFiles[activeConflictIndex]?.content || ''}
+                onChange={(e) => updateConflictFileContent(activeConflictIndex, e.target.value)}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  padding: 8,
+                  fontFamily: 'SF Mono, Monaco, Menlo, Courier New, monospace',
+                  fontSize: 12,
+                  lineHeight: 1.5,
+                  border: '1px solid transparent',
+                  borderRadius: 4,
+                  background: 'transparent',
+                  color: 'transparent',
+                  caretColor: 'inherit',
+                  resize: 'none',
+                  zIndex: 2,
+                  width: '100%',
+                  height: '100%'
+                }}
+              />
+            </div>
 
             {/* Merge commit message */}
             <div style={{ padding: '0 12px 8px' }}>
