@@ -269,6 +269,11 @@ const RequestTabPanel = () => {
     return <OpenAPISpecTab collection={collection} />;
   }
 
+  if (focusedTab.type === 'git-ui') {
+    const GitUITab = require('components/Git/GitUITab').default;
+    return <GitUITab collection={collection} />;
+  }
+
   if (!item || !item.uid) {
     return <RequestNotFound itemUid={activeTabUid} />;
   }

@@ -159,7 +159,8 @@ const RequestTab = ({ tab, collection, tabIndex, collectionRequestTabs, folderUi
     'workspaceOverview',
     'workspaceEnvironments',
     'openapi-sync',
-    'openapi-spec'
+    'openapi-spec',
+    'git-ui'
   ];
 
   const hasDraft = tab.type === 'collection-settings' && collection?.draft;

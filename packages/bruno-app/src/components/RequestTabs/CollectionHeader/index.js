@@ -12,9 +12,13 @@ import {
   IconX,
   IconCheck,
   IconFolder,
-  IconUpload
+  IconUpload,
+  IconDownload,
+  IconGitBranch
 } from '@tabler/icons';
 import OpenAPISyncIcon from 'components/Icons/OpenAPISync';
+import GitInitModal from 'components/Git/GitInitModal';
+import { setGitRootPath, initCollectionGitState, pushChanges, pullChanges, fetchAndRefresh, switchBranch, loadGitBranches } from 'providers/ReduxStore/slices/git';
 import { switchWorkspace, renameWorkspaceAction, exportWorkspaceAction, confirmWorkspaceCreation, cancelWorkspaceCreation } from 'providers/ReduxStore/slices/workspaces/actions';
 import { updateWorkspace } from 'providers/ReduxStore/slices/workspaces';
 import { showInFolder } from 'providers/ReduxStore/slices/collections/actions';
@@ -46,8 +50,13 @@ const CollectionHeader = ({ collection, isScratchCollection }) => {
 
   // Get the current active workspace
   const currentWorkspace = workspaces.find((w) => w.uid === activeWorkspaceUid);
-  const gitRootPath = collection?.git?.gitRootPath;
   const isOpenAPISyncEnabled = useBetaFeature(BETA_FEATURES.OPENAPI_SYNC);
+
+  // Git state
+  const gitCollectionState = useSelector((state) => state.git.collections[collection?.uid]);
+  const gitRootPath = gitCollectionState?.gitRootPath || collection?.git?.gitRootPath;
+  const gitCurrentBranch = gitCollectionState?.currentBranch;
+  const [showGitInitModal, setShowGitInitModal] = useState(false);
 
   // Workspace rename state
   const [isRenamingWorkspace, setIsRenamingWorkspace] = useState(false);
@@ -70,6 +79,19 @@ const CollectionHeader = ({ collection, isScratchCollection }) => {
   const onWorkspaceActionsCreate = (ref) => (workspaceActionsRef.current = ref);
 
   // Auto-enter rename mode when workspace is newly created
+  // Detect git root path for this collection
+  useEffect(() => {
+    if (!collection?.pathname || !collection?.uid) return;
+    dispatch(initCollectionGitState({ collectionUid: collection.uid }));
+    window.ipcRenderer.invoke('renderer:git-get-root-path', { collectionPath: collection.pathname })
+      .then((rootPath) => {
+        if (rootPath) {
+          dispatch(setGitRootPath({ collectionUid: collection.uid, gitRootPath: rootPath }));
+        }
+      })
+      .catch(() => {});
+  }, [collection?.pathname, collection?.uid]);
+
   useEffect(() => {
     if (isScratchCollection && currentWorkspace?.isNewlyCreated) {
       dispatch(updateWorkspace({ uid: currentWorkspace.uid, isNewlyCreated: false }));
@@ -394,212 +416,261 @@ const CollectionHeader = ({ collection, isScratchCollection }) => {
     && !isRenamingWorkspace;
 
   return (
-    <StyledWrapper>
-      {closeWorkspaceModalOpen && currentWorkspace?.uid && (
-        <CloseWorkspace
-          workspaceUid={currentWorkspace.uid}
-          onClose={() => setCloseWorkspaceModalOpen(false)}
-        />
-      )}
+    <>
+      <StyledWrapper>
+        {closeWorkspaceModalOpen && currentWorkspace?.uid && (
+          <CloseWorkspace
+            workspaceUid={currentWorkspace.uid}
+            onClose={() => setCloseWorkspaceModalOpen(false)}
+          />
+        )}
 
-      {createWorkspaceModalOpen && (
-        <CreateWorkspace onClose={handleAdvancedCreateClose} />
-      )}
+        {createWorkspaceModalOpen && (
+          <CreateWorkspace onClose={handleAdvancedCreateClose} />
+        )}
 
-      <div className="flex items-center justify-between gap-2 py-2 px-4">
-        {/* Left side: Switcher dropdown or rename input */}
-        <div className="collection-switcher">
-          {isRenamingWorkspace ? (
-            <div className="workspace-rename-container" ref={workspaceRenameContainerRef}>
-              <DisplayIcon size={18} strokeWidth={1.5} />
-              <div className="workspace-input-wrapper">
-                <input
-                  ref={workspaceNameInputRef}
-                  type="text"
-                  className="workspace-name-input"
-                  value={workspaceNameInput}
-                  onChange={handleWorkspaceNameChange}
-                  onKeyDown={handleWorkspaceNameKeyDown}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck="false"
-                />
-                {currentWorkspace?.isCreating && (
+        <div className="flex items-center justify-between gap-2 py-2 px-4">
+          {/* Left side: Switcher dropdown or rename input */}
+          <div className="collection-switcher">
+            {isRenamingWorkspace ? (
+              <div className="workspace-rename-container" ref={workspaceRenameContainerRef}>
+                <DisplayIcon size={18} strokeWidth={1.5} />
+                <div className="workspace-input-wrapper">
+                  <input
+                    ref={workspaceNameInputRef}
+                    type="text"
+                    className="workspace-name-input"
+                    value={workspaceNameInput}
+                    onChange={handleWorkspaceNameChange}
+                    onKeyDown={handleWorkspaceNameKeyDown}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
+                  />
+                  {currentWorkspace?.isCreating && (
+                    <button
+                      className="cog-btn"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={handleOpenAdvancedCreate}
+                      title="Advanced options"
+                    >
+                      <IconSettings size={13} strokeWidth={1.5} />
+                    </button>
+                  )}
+                </div>
+                <div className="inline-actions">
                   <button
-                    className="cog-btn"
+                    className="inline-action-btn save"
+                    onClick={handleSaveWorkspaceRename}
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={handleOpenAdvancedCreate}
-                    title="Advanced options"
+                    title={currentWorkspace?.isCreating ? 'Create' : 'Save'}
                   >
-                    <IconSettings size={13} strokeWidth={1.5} />
+                    <IconCheck size={14} strokeWidth={2} />
                   </button>
+                  <button
+                    className="inline-action-btn cancel"
+                    onClick={handleCancelWorkspaceRename}
+                    onMouseDown={(e) => e.preventDefault()}
+                    title="Cancel"
+                  >
+                    <IconX size={14} strokeWidth={2} />
+                  </button>
+                </div>
+                {workspaceNameError && (
+                  <span className="workspace-error">{workspaceNameError}</span>
                 )}
               </div>
-              <div className="inline-actions">
-                <button
-                  className="inline-action-btn save"
-                  onClick={handleSaveWorkspaceRename}
-                  onMouseDown={(e) => e.preventDefault()}
-                  title={currentWorkspace?.isCreating ? 'Create' : 'Save'}
-                >
-                  <IconCheck size={14} strokeWidth={2} />
-                </button>
-                <button
-                  className="inline-action-btn cancel"
-                  onClick={handleCancelWorkspaceRename}
-                  onMouseDown={(e) => e.preventDefault()}
-                  title="Cancel"
-                >
-                  <IconX size={14} strokeWidth={2} />
-                </button>
-              </div>
-              {workspaceNameError && (
-                <span className="workspace-error">{workspaceNameError}</span>
-              )}
-            </div>
-          ) : (
-            <Dropdown
-              placement="bottom-start"
-              onCreate={onSwitcherCreate}
-              appendTo={() => document.body}
-              icon={(
-                <button className="switcher-trigger">
-                  <DisplayIcon size={18} strokeWidth={1.5} />
-                  <span className={classNames('switcher-name', { 'scratch-collection': isScratchCollection })}>{displayName}</span>
-                  <IconChevronDown size={14} strokeWidth={1.5} className="chevron" />
-                </button>
-              )}
-            >
-              {/* Workspace section */}
-              {currentWorkspace && (
-                <>
-                  <div className="label-item">Workspace</div>
-                  <div
-                    className={classNames('dropdown-item', {
-                      'dropdown-item-active': isScratchCollection
-                    })}
-                    onClick={() => handleSwitchToWorkspace(currentWorkspace.uid)}
-                  >
-                    <div className="dropdown-icon">
-                      <IconCategory size={16} strokeWidth={1.5} />
-                    </div>
-                    <span className="dropdown-label">
-                      {currentWorkspace.name || 'Untitled Workspace'}
-                    </span>
-                    {workspaceTabCount > 0 && (
-                      <span className="dropdown-tab-count">{workspaceTabCount}</span>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {/* Collections section */}
-              {mountedCollections.length > 0 && (
-                <>
-                  <div className="dropdown-separator" />
-                  <div className="label-item">Collections</div>
-                  {mountedCollections.map((col) => {
-                    const colTabCount = getTabCount(col.uid);
-                    return (
-                      <div
-                        key={col.uid}
-                        className={classNames('dropdown-item', {
-                          'dropdown-item-active': !isScratchCollection && collection.uid === col.uid
-                        })}
-                        onClick={() => handleSwitchToCollection(col)}
-                      >
-                        <div className="dropdown-icon">
-                          <IconBox size={16} strokeWidth={1.5} />
-                        </div>
-                        <span className="dropdown-label">{col.name || 'Untitled Collection'}</span>
-                        {colTabCount > 0 && (
-                          <span className="dropdown-tab-count">{colTabCount}</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </>
-              )}
-            </Dropdown>
-          )}
-
-          {/* Workspace actions dropdown */}
-          {showWorkspaceActions && (
-            <Dropdown
-              placement="bottom-start"
-              onCreate={onWorkspaceActionsCreate}
-              appendTo={() => document.body}
-              icon={<IconDots size={18} strokeWidth={1.5} className="workspace-actions-trigger" />}
-            >
-              <div className="dropdown-item" onClick={handleRenameWorkspaceClick}>
-                <div className="dropdown-icon">
-                  <IconEdit size={16} strokeWidth={1.5} />
-                </div>
-                <span>Rename</span>
-              </div>
-              <div className="dropdown-item" onClick={handleShowInFolder}>
-                <div className="dropdown-icon">
-                  <IconFolder size={16} strokeWidth={1.5} />
-                </div>
-                <span>{getRevealInFolderLabel()}</span>
-              </div>
-              <div className="dropdown-item" onClick={handleExportWorkspace}>
-                <div className="dropdown-icon">
-                  <IconUpload size={16} strokeWidth={1.5} />
-                </div>
-                <span>Export</span>
-              </div>
-              <div className="dropdown-item" onClick={handleCloseWorkspaceClick}>
-                <div className="dropdown-icon">
-                  <IconX size={16} strokeWidth={1.5} />
-                </div>
-                <span>Close</span>
-              </div>
-            </Dropdown>
-          )}
-        </div>
-
-        {/* Right side: Actions (only for regular collections) */}
-        {!isScratchCollection && (
-          <div className="flex flex-grow gap-1.5 items-center justify-end">
-            {/* OpenAPI Sync - standalone only when configured and beta enabled */}
-            {isOpenAPISyncEnabled && hasOpenApiSyncConfigured && (
-              <ToolHint
-                text={hasOpenApiError ? 'OpenAPI Error' : hasOpenApiUpdates ? 'OpenAPI Updates Available' : 'OpenAPI'}
-                toolhintId="OpenApiSyncToolhintId"
-                place="bottom"
+            ) : (
+              <Dropdown
+                placement="bottom-start"
+                onCreate={onSwitcherCreate}
+                appendTo={() => document.body}
+                icon={(
+                  <button className="switcher-trigger">
+                    <DisplayIcon size={18} strokeWidth={1.5} />
+                    <span className={classNames('switcher-name', { 'scratch-collection': isScratchCollection })}>{displayName}</span>
+                    <IconChevronDown size={14} strokeWidth={1.5} className="chevron" />
+                  </button>
+                )}
               >
-                <ActionIcon onClick={viewOpenApiSync} aria-label="OpenAPI" size="sm" className="relative">
-                  <OpenAPISyncIcon size={15} />
-                  {(hasOpenApiUpdates || hasOpenApiError) && (
-                    <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full" style={{ backgroundColor: hasOpenApiError ? theme.status.danger.text : theme.status.warning.text }} />
-                  )}
+                {/* Workspace section */}
+                {currentWorkspace && (
+                  <>
+                    <div className="label-item">Workspace</div>
+                    <div
+                      className={classNames('dropdown-item', {
+                        'dropdown-item-active': isScratchCollection
+                      })}
+                      onClick={() => handleSwitchToWorkspace(currentWorkspace.uid)}
+                    >
+                      <div className="dropdown-icon">
+                        <IconCategory size={16} strokeWidth={1.5} />
+                      </div>
+                      <span className="dropdown-label">
+                        {currentWorkspace.name || 'Untitled Workspace'}
+                      </span>
+                      {workspaceTabCount > 0 && (
+                        <span className="dropdown-tab-count">{workspaceTabCount}</span>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* Collections section */}
+                {mountedCollections.length > 0 && (
+                  <>
+                    <div className="dropdown-separator" />
+                    <div className="label-item">Collections</div>
+                    {mountedCollections.map((col) => {
+                      const colTabCount = getTabCount(col.uid);
+                      return (
+                        <div
+                          key={col.uid}
+                          className={classNames('dropdown-item', {
+                            'dropdown-item-active': !isScratchCollection && collection.uid === col.uid
+                          })}
+                          onClick={() => handleSwitchToCollection(col)}
+                        >
+                          <div className="dropdown-icon">
+                            <IconBox size={16} strokeWidth={1.5} />
+                          </div>
+                          <span className="dropdown-label">{col.name || 'Untitled Collection'}</span>
+                          {colTabCount > 0 && (
+                            <span className="dropdown-tab-count">{colTabCount}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </Dropdown>
+            )}
+
+            {/* Workspace actions dropdown */}
+            {showWorkspaceActions && (
+              <Dropdown
+                placement="bottom-start"
+                onCreate={onWorkspaceActionsCreate}
+                appendTo={() => document.body}
+                icon={<IconDots size={18} strokeWidth={1.5} className="workspace-actions-trigger" />}
+              >
+                <div className="dropdown-item" onClick={handleRenameWorkspaceClick}>
+                  <div className="dropdown-icon">
+                    <IconEdit size={16} strokeWidth={1.5} />
+                  </div>
+                  <span>Rename</span>
+                </div>
+                <div className="dropdown-item" onClick={handleShowInFolder}>
+                  <div className="dropdown-icon">
+                    <IconFolder size={16} strokeWidth={1.5} />
+                  </div>
+                  <span>{getRevealInFolderLabel()}</span>
+                </div>
+                <div className="dropdown-item" onClick={handleExportWorkspace}>
+                  <div className="dropdown-icon">
+                    <IconUpload size={16} strokeWidth={1.5} />
+                  </div>
+                  <span>Export</span>
+                </div>
+                <div className="dropdown-item" onClick={handleCloseWorkspaceClick}>
+                  <div className="dropdown-icon">
+                    <IconX size={16} strokeWidth={1.5} />
+                  </div>
+                  <span>Close</span>
+                </div>
+              </Dropdown>
+            )}
+          </div>
+
+          {/* Right side: Actions (only for regular collections) */}
+          {!isScratchCollection && (
+            <div className="flex flex-grow gap-1.5 items-center justify-end">
+              {/* OpenAPI Sync - standalone only when configured and beta enabled */}
+              {isOpenAPISyncEnabled && hasOpenApiSyncConfigured && (
+                <ToolHint
+                  text={hasOpenApiError ? 'OpenAPI Error' : hasOpenApiUpdates ? 'OpenAPI Updates Available' : 'OpenAPI'}
+                  toolhintId="OpenApiSyncToolhintId"
+                  place="bottom"
+                >
+                  <ActionIcon onClick={viewOpenApiSync} aria-label="OpenAPI" size="sm" className="relative">
+                    <OpenAPISyncIcon size={15} />
+                    {(hasOpenApiUpdates || hasOpenApiError) && (
+                      <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full" style={{ backgroundColor: hasOpenApiError ? theme.status.danger.text : theme.status.warning.text }} />
+                    )}
+                  </ActionIcon>
+                </ToolHint>
+              )}
+              {/* Git branch pill + dropdown */}
+              {gitRootPath && gitCurrentBranch ? (
+                <MenuDropdown
+                  items={[
+                    { id: 'checkout', label: 'Checkout Branch', leftSection: IconGitBranch, onClick: () => { /* handled via branch modal - TODO */ } },
+                    { id: 'push', label: 'Push', leftSection: IconUpload, onClick: () => {
+                      const pid = uuid(); dispatch(pushChanges(collection.uid, collection.pathname, 'origin', gitCurrentBranch, pid));
+                    } },
+                    { id: 'pull', label: 'Pull', leftSection: IconDownload, onClick: () => {
+                      const pid = uuid(); dispatch(pullChanges(collection.uid, collection.pathname, 'origin', gitCurrentBranch, '--no-rebase', pid));
+                    } },
+                    { id: 'git-ui', label: 'Git UI', leftSection: IconGitBranch, onClick: () => {
+                      dispatch(addTab({ uid: `git-ui-${collection.uid}`, collectionUid: collection.uid, type: 'git-ui' })); dispatch(focusTab({ uid: `git-ui-${collection.uid}` }));
+                    } }
+                  ]}
+                  placement="bottom-end"
+                  data-testid="git-branch-menu"
+                >
+                  <button
+                    className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-full cursor-pointer"
+                    style={{ border: `1px solid ${theme.border.border1}`, background: 'transparent', color: theme.text }}
+                    data-testid="git-branch-pill"
+                  >
+                    <IconGitBranch size={12} strokeWidth={1.5} />
+                    {gitCurrentBranch}
+                  </button>
+                </MenuDropdown>
+              ) : (
+                <ToolHint text="Git" toolhintId="GitToolhintId" place="bottom">
+                  <ActionIcon
+                    onClick={() => setShowGitInitModal(true)}
+                    aria-label="Initialize Git"
+                    size="sm"
+                    data-testid="git-init-toggle"
+                  >
+                    <IconGitBranch size={16} strokeWidth={1.5} />
+                  </ActionIcon>
+                </ToolHint>
+              )}
+              {/* Runner - always visible */}
+              <ToolHint text="Runner" toolhintId="RunnerToolhintId" place="bottom">
+                <ActionIcon onClick={handleRun} aria-label="Runner" size="sm" data-testid="runner">
+                  <IconRun size={16} strokeWidth={1.5} />
                 </ActionIcon>
               </ToolHint>
-            )}
-            {/* Runner - always visible */}
-            <ToolHint text="Runner" toolhintId="RunnerToolhintId" place="bottom">
-              <ActionIcon onClick={handleRun} aria-label="Runner" size="sm" data-testid="runner">
-                <IconRun size={16} strokeWidth={1.5} />
-              </ActionIcon>
-            </ToolHint>
-            {/* JS Sandbox Mode - always visible */}
-            <JsSandboxMode collection={collection} />
-            {/* Overflow menu */}
-            <MenuDropdown items={overflowMenuItems} placement="bottom-end" data-testid="more-actions">
-              <ActionIcon label="More actions" size="sm" style={{ border: `1px solid ${theme.border.border1}`, borderRadius: theme.border.radius.base, width: 24, marginRight: 4, marginLeft: 4 }}>
-                <IconDots size={16} strokeWidth={1.5} />
-              </ActionIcon>
-            </MenuDropdown>
-            {/* Environment Selector - always visible */}
-            <span>
-              <EnvironmentSelector collection={collection} />
-            </span>
-          </div>
-        )}
-      </div>
-    </StyledWrapper>
+              {/* JS Sandbox Mode - always visible */}
+              <JsSandboxMode collection={collection} />
+              {/* Overflow menu */}
+              <MenuDropdown items={overflowMenuItems} placement="bottom-end" data-testid="more-actions">
+                <ActionIcon label="More actions" size="sm" style={{ border: `1px solid ${theme.border.border1}`, borderRadius: theme.border.radius.base, width: 24, marginRight: 4, marginLeft: 4 }}>
+                  <IconDots size={16} strokeWidth={1.5} />
+                </ActionIcon>
+              </MenuDropdown>
+              {/* Environment Selector - always visible */}
+              <span>
+                <EnvironmentSelector collection={collection} />
+              </span>
+            </div>
+          )}
+        </div>
+      </StyledWrapper>
+
+      {showGitInitModal && (
+        <GitInitModal
+          collectionUid={collection.uid}
+          collectionPath={collection.pathname}
+          onClose={() => setShowGitInitModal(false)}
+        />
+      )}
+    </>
   );
 };
 
