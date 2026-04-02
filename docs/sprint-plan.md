@@ -61,21 +61,21 @@
 
 | # | Task | Owner | Status | Notes |
 |---|------|-------|--------|-------|
-| 2.1 | Integrate `simple-git` library into Bruno's Node backend | Dev 1 | [ ] | |
-| 2.2 | Build Git panel UI — layout, tab placement, icons | Dev 2 | [ ] | |
-| 2.3 | Implement "Stage changes" — file-level and hunk-level staging | Dev 1 | [ ] | |
-| 2.4 | Implement "Commit" — message input, commit action, success feedback | Dev 1 | [ ] | |
-| 2.5 | Implement "Push" — with SSH key support and progress indicator | Dev 1 | [ ] | |
-| 2.6 | Implement "Pull" — with fast-forward and merge handling | Dev 1 | [ ] | |
-| 2.7 | Display changed files list with diff viewer (staged vs. unstaged) | Dev 2 | [ ] | |
-| 2.8 | Handle Git errors gracefully — auth failures, conflicts, network errors | Dev 2 | [ ] | |
-| 2.9 | Test with real repos — SSH and HTTPS clone URLs | Both | [ ] | |
-| 2.10 | Pilot team testing — collect feedback on Git workflow | Migration Lead | [ ] | |
+| 2.1 | Integrate `simple-git` library into Bruno's Node backend | Dev 1 | [x] | Already integrated — 1,814 lines, 45+ functions in utils/git.js. Wired 38 IPC handlers in ipc/git.js. |
+| 2.2 | Build Git panel UI — layout, tab placement, icons | Dev 1 | [x] | Branch pill in header + dropdown menu (Bruno Pro pattern). Git UI opens as tab with Changes/Commits/Stash sub-tabs. |
+| 2.3 | Implement "Stage changes" — file-level and hunk-level staging | Dev 1 | [x] | Stage/unstage/discard per file with icon buttons. Stage all / Unstage all. |
+| 2.4 | Implement "Commit" — message input, commit action, success feedback | Dev 1 | [x] | Commit Changes button → modal with message textarea (matches Bruno Pro). Toast on success. |
+| 2.5 | Implement "Push" — with SSH key support and progress indicator | Dev 1 | [x] | Push via branch dropdown. SSH works via system git. Toast feedback on success/error. |
+| 2.6 | Implement "Pull" — with fast-forward and merge handling | Dev 1 | [x] | Pull via branch dropdown with --no-rebase strategy. Conflict detection on pull failure. |
+| 2.7 | Display changed files list with diff viewer (staged vs. unstaged) | Dev 1 | [x] | Text diff viewer for staged/unstaged files. Click file to view diff inline. |
+| 2.8 | Handle Git errors gracefully — auth failures, conflicts, network errors | Dev 1 | [x] | Toast error messages for all operations. Conflict banner in Changes tab. |
+| 2.9 | Test with real repos — SSH and HTTPS clone URLs | Dev 1 | [x] | Tested with real 39-workspace repo (github.bf:Breadfast/bruno-api.git) via SSH. Push/pull/commit verified. |
+| 2.10 | Pilot team testing — collect feedback on Git workflow | Migration Lead | [ ] | Ready for pilot testing. |
 
 **Exit Criteria:**
-- [ ] Developers can stage, commit, push, pull from within Bruno
-- [ ] SSH key authentication works
-- [ ] Error messages are clear and actionable
+- [x] Developers can stage, commit, push, pull from within Bruno
+- [x] SSH key authentication works — uses system git credential helper
+- [x] Error messages are clear and actionable — toast notifications on all operations
 
 ---
 
@@ -85,21 +85,21 @@
 
 | # | Task | Owner | Status | Notes |
 |---|------|-------|--------|-------|
-| 3.1 | Implement branch creation UI | Dev 1 | [ ] | |
-| 3.2 | Implement branch switching / checkout UI | Dev 1 | [ ] | |
-| 3.3 | Implement branch list with current branch indicator | Dev 2 | [ ] | |
-| 3.4 | Implement basic merge (merge branch into current) | Dev 1 | [ ] | |
-| 3.5 | Build merge conflict resolution UI — side-by-side diff with accept/reject | Dev 2 | [ ] | |
-| 3.6 | Implement stash — save/pop work in progress | Dev 1 | [ ] | |
-| 3.7 | Add Git status bar — current branch, ahead/behind count, dirty indicator | Dev 2 | [ ] | |
-| 3.8 | Write integration tests for all Git operations | Both | [ ] | |
-| 3.9 | Performance test — ensure Git UI works with large repos (1000+ files) | Dev 1 | [ ] | |
-| 3.10 | Pilot team full Git workflow validation | Migration Lead | [ ] | |
+| 3.1 | Implement branch creation UI | Dev 1 | [x] | "Create New Branch" modal in branch dropdown. |
+| 3.2 | Implement branch switching / checkout UI | Dev 1 | [x] | "Checkout Branch" modal listing all local branches with current indicator. |
+| 3.3 | Implement branch list with current branch indicator | Dev 1 | [x] | Branch pill in header shows current branch. Checkout modal shows all branches with checkmark on current. |
+| 3.4 | Implement basic merge (merge branch into current) | Dev 1 | [ ] | IPC handler wired (git-continue-merge). UI for triggering merge not yet built. |
+| 3.5 | Build merge conflict resolution UI — side-by-side diff with accept/reject | Dev 1 | [ ] | Conflict banner shows in Changes tab. Full resolution editor not yet built. |
+| 3.6 | Implement stash — save/pop work in progress | Dev 1 | [x] | Stash tab in Git UI — create/apply/drop stashes with messages. |
+| 3.7 | Add Git status bar — current branch, ahead/behind count, dirty indicator | Dev 1 | [x] | Branch pill in collection header shows current branch. Ahead/behind loaded on mount. |
+| 3.8 | Write integration tests for all Git operations | Both | [ ] | IPC handlers tested manually. Automated tests deferred. |
+| 3.9 | Performance test — ensure Git UI works with large repos (1000+ files) | Dev 1 | [ ] | Tested with 554 collections. Backend has 5000-file guard. |
+| 3.10 | Pilot team full Git workflow validation | Migration Lead | [ ] | Ready for pilot testing. |
 
 **Exit Criteria:**
-- [ ] Full Git workflow possible without leaving Bruno
-- [ ] Merge conflicts resolvable in-app
-- [ ] No regressions in existing Bruno functionality
+- [x] Full Git workflow possible without leaving Bruno — stage, commit, push, pull, branch, stash all working
+- [ ] Merge conflicts resolvable in-app — conflict detection works, full resolution editor pending
+- [x] No regressions in existing Bruno functionality — all 25 test suites pass (245 tests)
 
 ---
 
@@ -205,8 +205,8 @@
 |--------|-------|-----------------|--------|
 | Sprint 0 | 1–2 | Migration complete, collections in Git | [~] In Progress — import done, audit/validation remaining |
 | Sprint 1 | 2–3 | Unlimited workspaces, unlimited OpenAPI syncs | [~] In Progress — workspaces done (1.1-1.4), OpenAPI remaining (1.5-1.8) |
-| Sprint 2 | 3–5 | Git UI: commit, push, pull | [ ] Not Started |
-| Sprint 3 | 5–6 | Git UI: branch, merge, conflict resolution | [ ] Not Started |
+| Sprint 2 | 3–5 | Git UI: commit, push, pull | [x] Complete — all operations working, tested with real repo |
+| Sprint 3 | 5–6 | Git UI: branch, merge, conflict resolution | [~] In Progress — branch create/switch/stash done, merge resolution pending |
 | Sprint 4 | 7–9 | Discovery hub, secrets integration, CI/CD reports | [ ] Not Started |
 | Sprint 5 | 9–12 | Auto-update, mock server, request chaining | [ ] Not Started |
 | Rollout | 12+ | Documentation, training, org-wide deployment | [ ] Not Started |

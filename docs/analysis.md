@@ -57,6 +57,17 @@ Build a full Git UI panel inside Bruno using `simple-git` (Node.js library). Cov
 
 This alone eliminates the #1 friction point for your team and is the highest-value feature to implement.
 
+**Implementation Status:** Completed (2026-04-02). Full Git UI built matching Bruno Pro's pattern:
+- Branch pill in collection header with dropdown menu (Create Branch, Checkout, Push, Pull, Git UI)
+- Git UI opens as a tab with Changes/Commits/Stash sub-tabs
+- Stage/unstage/discard files, commit via modal, push/pull/fetch
+- Branch creation and switching via modals
+- Stash create/apply/drop
+- 38 IPC handlers wired to the existing 1,814-line `simple-git` backend
+- Full Redux state management per collection
+- Tested with real 39-workspace, 554-collection repo via SSH
+- Remaining: merge conflict resolution editor, progress indicators for push/pull
+
 ---
 
 #### 2. Workspace Management (Beyond 2)
