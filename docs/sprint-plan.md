@@ -103,45 +103,24 @@
 
 ---
 
-## Sprint 4 — Team Scale: Discovery, Secrets & CI/CD (Weeks 7–9)
+## Sprint 4 — Team Scale: Collection Discovery (Weeks 7–9)
 
-**Goal:** Support enterprise-scale collaboration, centralized secrets, and automated testing.
+**Goal:** Help 200 developers discover and access the right API collections across 39 workspaces and 554 collections.
 
 ### Collection Discovery Hub
 
 | # | Task | Owner | Status | Notes |
 |---|------|-------|--------|-------|
-| 4.1 | Design Collection Hub data model — name, team, description, endpoint count, last updated | Dev 2 | [ ] | |
-| 4.2 | Build indexer that scans GitHub/GitLab repos for Bruno collections via API | Dev 2 | [ ] | |
-| 4.3 | Build Collection Hub UI — search, filter by team/domain, sort by last updated | Dev 2 | [ ] | |
-| 4.4 | Implement one-click clone from Hub into local Bruno workspace | Dev 2 | [ ] | |
-| 4.5 | Add collection metadata file (`.bruno-meta.json`) for teams to describe their collections | Dev 2 | [ ] | |
-
-### Shared Secrets & Environments
-
-| # | Task | Owner | Status | Notes |
-|---|------|-------|--------|-------|
-| 4.6 | Build CLI tool to pull shared env templates from central Git repo → local `.env` | Dev 1 | [ ] | |
-| 4.7 | Integrate HashiCorp Vault SDK — fetch secrets at runtime in Bruno GUI | Dev 1 | [ ] | |
-| 4.8 | Integrate AWS Secrets Manager SDK — fetch secrets at runtime in Bruno GUI | Dev 1 | [ ] | |
-| 4.9 | Add pre-commit hook that scans for leaked credentials in `.bru` files | Dev 1 | [ ] | |
-| 4.10 | Enforce `.gitignore` rules for `.env` files in all collection repos | Migration Lead | [ ] | |
-
-### CI/CD Integration & Reports
-
-| # | Task | Owner | Status | Notes |
-|---|------|-------|--------|-------|
-| 4.11 | Extend Bruno CLI to output JUnit XML format | Dev 1 | [ ] | |
-| 4.12 | Extend Bruno CLI to generate standalone HTML reports | Dev 2 | [ ] | |
-| 4.13 | Implement data-driven testing — CSV/JSON dataset iteration | Dev 2 | [ ] | |
-| 4.14 | Create GitHub Actions reusable workflow template | Dev 1 | [ ] | |
-| 4.15 | Create GitLab CI pipeline template | Dev 1 | [ ] | |
-| 4.16 | Add Slack/Teams notification on test failure | Dev 2 | [ ] | |
+| 4.1 | Design Collection Hub data model — name, team, description, endpoint count, last updated | Dev 1 | [ ] | |
+| 4.2 | Build indexer that scans GitHub/GitLab repos for Bruno collections via API | Dev 1 | [ ] | |
+| 4.3 | Build Collection Hub UI — search, filter by team/domain, sort by last updated | Dev 1 | [ ] | |
+| 4.4 | Implement one-click clone from Hub into local Bruno workspace | Dev 1 | [ ] | |
+| 4.5 | Add collection metadata file (`.bruno-meta.json`) for teams to describe their collections | Dev 1 | [ ] | |
 
 **Exit Criteria:**
 - [ ] Teams can search and discover collections from within Bruno
-- [ ] Secrets pulled from Vault/AWS without being committed to Git
-- [ ] CI pipeline runs collections and produces JUnit + HTML reports
+
+*Note: Shared Secrets & Environments (4.6-4.10) and CI/CD Integration & Reports (4.11-4.16) removed — not needed currently.*
 
 ---
 
