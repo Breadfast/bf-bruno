@@ -312,6 +312,13 @@ const add = async (win, pathname, collectionUid, collectionPath, useWorkerThread
     const fileStats = fs.statSync(pathname);
     let content = fs.readFileSync(pathname, 'utf8');
 
+    // Skip files with git conflict markers — they're not valid YAML/BRU and will crash the parser
+    if (content.includes('<<<<<<<') && content.includes('>>>>>>>')) {
+      console.warn('Skipping file with git conflict markers:', pathname);
+      watcher.markFileAsProcessed(win, collectionUid, pathname);
+      return;
+    }
+
     // If worker thread is not used, we can directly parse the file
     if (!useWorkerThread) {
       try {
@@ -421,6 +428,17 @@ const addDirectory = async (win, pathname, collectionUid, collectionPath) => {
 };
 
 const change = async (win, pathname, collectionUid, collectionPath) => {
+  // Skip files with git conflict markers
+  try {
+    const content = fs.readFileSync(pathname, 'utf8');
+    if (content.includes('<<<<<<<') && content.includes('>>>>>>>')) {
+      console.warn('Skipping file change with git conflict markers:', pathname);
+      return;
+    }
+  } catch {
+    // file might not exist anymore
+  }
+
   if (isBrunoConfigFile(pathname, collectionPath)) {
     try {
       const content = fs.readFileSync(pathname, 'utf8');
