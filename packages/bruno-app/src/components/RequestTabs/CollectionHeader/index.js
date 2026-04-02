@@ -14,10 +14,12 @@ import {
   IconFolder,
   IconUpload,
   IconDownload,
-  IconGitBranch
+  IconGitBranch,
+  IconPlus
 } from '@tabler/icons';
 import OpenAPISyncIcon from 'components/Icons/OpenAPISync';
 import GitInitModal from 'components/Git/GitInitModal';
+import Modal from 'components/Modal';
 import { setGitRootPath, initCollectionGitState, pushChanges, pullChanges, fetchAndRefresh, switchBranch, loadGitBranches, loadGitData } from 'providers/ReduxStore/slices/git';
 import { switchWorkspace, renameWorkspaceAction, exportWorkspaceAction, confirmWorkspaceCreation, cancelWorkspaceCreation } from 'providers/ReduxStore/slices/workspaces/actions';
 import { updateWorkspace } from 'providers/ReduxStore/slices/workspaces';
@@ -56,7 +58,11 @@ const CollectionHeader = ({ collection, isScratchCollection }) => {
   const gitCollectionState = useSelector((state) => state.git.collections[collection?.uid]);
   const gitRootPath = gitCollectionState?.gitRootPath || collection?.git?.gitRootPath;
   const gitCurrentBranch = gitCollectionState?.currentBranch;
+  const gitBranches = gitCollectionState?.branches || [];
   const [showGitInitModal, setShowGitInitModal] = useState(false);
+  const [showBranchModal, setShowBranchModal] = useState(false);
+  const [showCreateBranch, setShowCreateBranch] = useState(false);
+  const [newBranchName, setNewBranchName] = useState('');
 
   // Workspace rename state
   const [isRenamingWorkspace, setIsRenamingWorkspace] = useState(false);
@@ -606,7 +612,10 @@ const CollectionHeader = ({ collection, isScratchCollection }) => {
               {gitRootPath && gitCurrentBranch ? (
                 <MenuDropdown
                   items={[
-                    { id: 'checkout', label: 'Checkout Branch', leftSection: IconGitBranch, onClick: () => { /* handled via branch modal - TODO */ } },
+                    { id: 'create-branch', label: 'Create New Branch', leftSection: IconPlus, onClick: () => setShowCreateBranch(true) },
+                    { id: 'checkout', label: 'Checkout Branch', leftSection: IconGitBranch, onClick: () => {
+                      dispatch(loadGitBranches(collection.uid, collection.pathname)); setShowBranchModal(true);
+                    } },
                     { id: 'push', label: 'Push', leftSection: IconUpload, onClick: () => {
                       const pid = uuid(); dispatch(pushChanges(collection.uid, collection.pathname, 'origin', gitCurrentBranch, pid));
                     } },
@@ -670,6 +679,77 @@ const CollectionHeader = ({ collection, isScratchCollection }) => {
           collectionPath={collection.pathname}
           onClose={() => setShowGitInitModal(false)}
         />
+      )}
+      {showBranchModal && (
+        <Modal
+          size="sm"
+          title="Checkout Branch"
+          handleCancel={() => setShowBranchModal(false)}
+          hideFooter={true}
+        >
+          <div className="py-2">
+            {gitBranches.length === 0 && (
+              <div className="text-center py-4" style={{ opacity: 0.5, fontSize: 13 }}>No branches found</div>
+            )}
+            {gitBranches.map((branch) => (
+              <div
+                key={branch}
+                className="flex items-center justify-between px-4 py-2 cursor-pointer text-sm"
+                style={{ opacity: branch === gitCurrentBranch ? 1 : 0.7 }}
+                onClick={() => {
+                  if (branch !== gitCurrentBranch) {
+                    const pid = uuid();
+                    dispatch(switchBranch(collection.uid, collection.pathname, branch, false, pid));
+                  }
+                  setShowBranchModal(false);
+                }}
+              >
+                <span style={{ fontWeight: branch === gitCurrentBranch ? 600 : 400 }}>{branch}</span>
+                {branch === gitCurrentBranch && <IconCheck size={14} strokeWidth={1.5} />}
+              </div>
+            ))}
+          </div>
+        </Modal>
+      )}
+      {showCreateBranch && (
+        <Modal
+          size="sm"
+          title="Create New Branch"
+          confirmText="Create"
+          handleConfirm={() => {
+            if (newBranchName.trim()) {
+              const pid = uuid();
+              dispatch(switchBranch(collection.uid, collection.pathname, newBranchName.trim(), true, pid));
+              setNewBranchName('');
+              setShowCreateBranch(false);
+            }
+          }}
+          handleCancel={() => {
+            setNewBranchName(''); setShowCreateBranch(false);
+          }}
+          confirmDisabled={!newBranchName.trim()}
+        >
+          <div className="px-2 py-2">
+            <label className="font-semibold mb-2 text-sm block">Branch Name</label>
+            <input
+              type="text"
+              className="block textbox w-full"
+              placeholder="feature/my-branch"
+              value={newBranchName}
+              onChange={(e) => setNewBranchName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newBranchName.trim()) {
+                  const pid = uuid();
+                  dispatch(switchBranch(collection.uid, collection.pathname, newBranchName.trim(), true, pid));
+                  setNewBranchName('');
+                  setShowCreateBranch(false);
+                }
+              }}
+              autoFocus
+              style={{ fontSize: 13 }}
+            />
+          </div>
+        </Modal>
       )}
     </>
   );
