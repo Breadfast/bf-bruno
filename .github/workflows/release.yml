@@ -38,18 +38,18 @@ jobs:
       - name: Build web
         run: npm run build:web
 
-      - name: Build Electron (macOS)
+      - name: Prepare Electron build
         run: |
-          # Prepare web build for Electron
           rm -rf packages/bruno-electron/out packages/bruno-electron/web
           mkdir packages/bruno-electron/web
           cp -r packages/bruno-app/dist/* packages/bruno-electron/web
-          sed -i'' -e 's@/static/@static/@g' packages/bruno-electron/web/**.html
-          sed -i'' -e 's@/static/font@../../static/font@g' packages/bruno-electron/web/static/css/**.**.css
+          sed -i '' 's@/static/@static/@g' packages/bruno-electron/web/*.html
+          sed -i '' 's@/static/font@../../static/font@g' packages/bruno-electron/web/static/css/*.css
           find packages/bruno-electron/web -name '*.map' -type f -delete
-          # Build
-          cd packages/bruno-electron
-          npx electron-builder --mac --config electron-builder-config.js --publish never
+
+      - name: Build Electron (macOS)
+        working-directory: packages/bruno-electron
+        run: npx electron-builder --mac --config electron-builder-config.js --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           CSC_LINK: ""
@@ -61,6 +61,7 @@ jobs:
           path: |
             packages/bruno-electron/out/*.dmg
             packages/bruno-electron/out/*.zip
+            packages/bruno-electron/out/*.pkg
           retention-days: 30
 
   build-linux:
@@ -95,16 +96,18 @@ jobs:
       - name: Build web
         run: npm run build:web
 
-      - name: Build Electron (Linux)
+      - name: Prepare Electron build
         run: |
           rm -rf packages/bruno-electron/out packages/bruno-electron/web
           mkdir packages/bruno-electron/web
           cp -r packages/bruno-app/dist/* packages/bruno-electron/web
-          sed -i'' -e 's@/static/@static/@g' packages/bruno-electron/web/**.html
-          sed -i'' -e 's@/static/font@../../static/font@g' packages/bruno-electron/web/static/css/**.**.css
+          sed -i 's@/static/@static/@g' packages/bruno-electron/web/*.html
+          sed -i 's@/static/font@../../static/font@g' packages/bruno-electron/web/static/css/*.css
           find packages/bruno-electron/web -name '*.map' -type f -delete
-          cd packages/bruno-electron
-          npx electron-builder --linux AppImage deb --config electron-builder-config.js --publish never
+
+      - name: Build Electron (Linux)
+        working-directory: packages/bruno-electron
+        run: npx electron-builder --linux AppImage deb --config electron-builder-config.js --publish never
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -148,17 +151,19 @@ jobs:
       - name: Build web
         run: npm run build:web
 
-      - name: Build Electron (Windows)
+      - name: Prepare Electron build
         shell: bash
         run: |
           rm -rf packages/bruno-electron/out packages/bruno-electron/web
           mkdir packages/bruno-electron/web
           cp -r packages/bruno-app/dist/* packages/bruno-electron/web
-          sed -i'' -e 's@/static/@static/@g' packages/bruno-electron/web/**.html
-          sed -i'' -e 's@/static/font@../../static/font@g' packages/bruno-electron/web/static/css/**.**.css
+          sed -i 's@/static/@static/@g' packages/bruno-electron/web/*.html
+          sed -i 's@/static/font@../../static/font@g' packages/bruno-electron/web/static/css/*.css
           find packages/bruno-electron/web -name '*.map' -type f -delete
-          cd packages/bruno-electron
-          npx electron-builder --win --config electron-builder-config.js --publish never
+
+      - name: Build Electron (Windows)
+        working-directory: packages/bruno-electron
+        run: npx electron-builder --win --config electron-builder-config.js --publish never
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
