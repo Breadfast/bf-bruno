@@ -325,6 +325,16 @@ const registerGitIpc = (mainWindow) => {
     return continueMerge(gitRootPath, conflictedFiles, commitMessage);
   });
 
+  // ── Read conflicted file content ─────────────────────────────────
+
+  ipcMain.handle('renderer:git-read-conflicted-file', async (event, { collectionPath, filePath }) => {
+    const gitRootPath = resolveGitRoot(collectionPath);
+    const fs = require('fs');
+    const path = require('path');
+    const fullPath = path.join(gitRootPath, filePath);
+    return fs.readFileSync(fullPath, 'utf8');
+  });
+
   // ── Remotes ────────────────────────────────────────────────────────
 
   ipcMain.handle('renderer:git-add-remote', async (event, { collectionPath, remoteName, remoteUrl }) => {

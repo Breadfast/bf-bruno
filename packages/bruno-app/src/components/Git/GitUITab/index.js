@@ -6,7 +6,9 @@ import {
   IconGitCommit,
   IconAlertTriangle,
   IconHistory,
-  IconArchive
+  IconArchive,
+  IconLoader2,
+  IconMinus
 } from '@tabler/icons';
 import Modal from 'components/Modal';
 import {
@@ -17,15 +19,20 @@ import {
   unstageFiles,
   discardFiles,
   commitAndRefresh,
+  pushChanges,
+  pullChanges,
+  fetchAndRefresh,
   createStashAndRefresh,
   applyStashAndRefresh,
   dropStashAndRefresh,
   abortConflict,
+  continueMergeAndRefresh,
   loadStagedDiff,
   loadUnstagedDiff,
   setGitActiveTab,
   setActiveDiff
 } from 'providers/ReduxStore/slices/git';
+import { uuid } from 'utils/common';
 import StyledWrapper from './StyledWrapper';
 
 const getStatusLabel = (file) => {
@@ -50,6 +57,7 @@ const GitUITab = ({ collection }) => {
   const gitState = useSelector((state) => state.git.collections[collectionUid]) || {};
   const {
     activeTab = 'changes',
+    currentBranch = null,
     status = { staged: [], unstaged: [], conflicted: [] },
     logs = [],
     stashes = [],
@@ -60,6 +68,12 @@ const GitUITab = ({ collection }) => {
   const [showCommitModal, setShowCommitModal] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
   const [stashMessage, setStashMessage] = useState('');
+
+  // Conflict resolution state
+  const [showConflictResolver, setShowConflictResolver] = useState(false);
+  const [conflictFiles, setConflictFiles] = useState([]);
+  const [activeConflictIndex, setActiveConflictIndex] = useState(0);
+  const [mergeCommitMessage, setMergeCommitMessage] = useState('Merge conflict resolution');
 
   useEffect(() => {
     if (collectionUid && collectionPath) {
@@ -114,24 +128,66 @@ const GitUITab = ({ collection }) => {
     }
   };
 
+  // Conflict resolution
+  const handleOpenConflictResolver = async () => {
+    const files = [];
+    for (const file of status.conflicted) {
+      try {
+        const content = await window.ipcRenderer.invoke('renderer:git-read-conflicted-file', {
+          collectionPath,
+          filePath: file.path
+        });
+        files.push({ path: file.path, content });
+      } catch (err) {
+        files.push({ path: file.path, content: `Error reading file: ${err.message}` });
+      }
+    }
+    setConflictFiles(files);
+    setActiveConflictIndex(0);
+    setShowConflictResolver(true);
+  };
+
+  const handleResolveConflicts = () => {
+    dispatch(continueMergeAndRefresh(collectionUid, collectionPath, conflictFiles, mergeCommitMessage));
+    setShowConflictResolver(false);
+    setConflictFiles([]);
+  };
+
+  const updateConflictFileContent = (index, newContent) => {
+    setConflictFiles((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], content: newContent };
+      return updated;
+    });
+  };
+
   const totalChanges = (status.staged?.length || 0) + (status.unstaged?.length || 0);
 
   const renderChanges = () => (
     <div>
+      {/* Conflict banner */}
       {status.conflicted?.length > 0 && (
         <div className="conflict-banner">
           <span>
             <IconAlertTriangle size={14} strokeWidth={1.5} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
-            {status.conflicted.length} conflicted file(s)
+            {status.conflicted.length} conflicted file(s) — resolve before committing
           </span>
-          <button
-            className="icon-btn danger"
-            onClick={() => dispatch(abortConflict(collectionUid, collectionPath))}
-            title="Abort merge"
-            style={{ width: 'auto', padding: '2px 8px', fontSize: '11px' }}
-          >
-            Abort merge
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              className="icon-btn"
+              onClick={handleOpenConflictResolver}
+              style={{ width: 'auto', padding: '2px 8px', fontSize: '11px', opacity: 1, border: '1px solid rgba(248, 81, 73, 0.3)', borderRadius: 4 }}
+            >
+              Resolve
+            </button>
+            <button
+              className="icon-btn danger"
+              onClick={() => dispatch(abortConflict(collectionUid, collectionPath))}
+              style={{ width: 'auto', padding: '2px 8px', fontSize: '11px' }}
+            >
+              Abort merge
+            </button>
+          </div>
         </div>
       )}
 
@@ -142,9 +198,10 @@ const GitUITab = ({ collection }) => {
       {/* Commit button */}
       <button
         className="commit-btn"
-        disabled={status.staged?.length === 0}
+        disabled={status.staged?.length === 0 || isLoading}
         onClick={() => setShowCommitModal(true)}
       >
+        {isLoading && <IconLoader2 size={14} strokeWidth={1.5} className="animate-spin" />}
         Commit Changes
       </button>
 
@@ -155,7 +212,7 @@ const GitUITab = ({ collection }) => {
             <span className="changes-title">Staged ({status.staged.length})</span>
             <div className="changes-actions">
               <button className="icon-btn" onClick={handleUnstageAll} title="Unstage all">
-                <IconArrowBackUp size={16} strokeWidth={1.5} />
+                <IconMinus size={16} strokeWidth={1.5} />
               </button>
             </div>
           </div>
@@ -166,7 +223,7 @@ const GitUITab = ({ collection }) => {
               </div>
               <div className="file-actions">
                 <button className="icon-btn" onClick={() => handleUnstageFile(file.path)} title="Unstage">
-                  <IconArrowBackUp size={15} strokeWidth={1.5} />
+                  <IconMinus size={15} strokeWidth={1.5} />
                 </button>
                 <span className={`file-status-badge ${getStatusLabel(file)}`}>{getStatusLabel(file)}</span>
               </div>
@@ -214,7 +271,26 @@ const GitUITab = ({ collection }) => {
         </div>
       ))}
 
-      {totalChanges === 0 && (
+      {/* Conflicted files */}
+      {status.conflicted?.length > 0 && (
+        <>
+          <div className="changes-header" style={{ marginTop: 8 }}>
+            <span className="changes-title" style={{ color: '#f85149' }}>Conflicted ({status.conflicted.length})</span>
+          </div>
+          {status.conflicted.map((file) => (
+            <div key={`conflict-${file.path}`} className="file-row">
+              <div className="file-info">
+                <span className="file-name" title={file.path}>{getFileName(file.path)}</span>
+              </div>
+              <div className="file-actions">
+                <span className="file-status-badge C">C</span>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {totalChanges === 0 && status.conflicted?.length === 0 && (
         <div className="empty-state">
           <IconGitCommit size={24} strokeWidth={1.5} />
           <div style={{ marginTop: 8 }}>No changes</div>
@@ -314,7 +390,15 @@ const GitUITab = ({ collection }) => {
 
   return (
     <StyledWrapper>
-      {/* Sub-tabs matching Bruno Pro: Commits, Tags, Changes */}
+      {/* Loading indicator */}
+      {isLoading && (
+        <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, borderBottom: '1px solid var(--color-sidebar-border, #333)' }}>
+          <IconLoader2 size={14} strokeWidth={1.5} className="animate-spin" />
+          <span style={{ opacity: 0.6 }}>Processing...</span>
+        </div>
+      )}
+
+      {/* Sub-tabs */}
       <div className="git-tab-header">
         <button
           className={`git-sub-tab ${activeTab === 'changes' ? 'active' : ''}`}
@@ -365,6 +449,89 @@ const GitUITab = ({ collection }) => {
               data-testid="git-commit-input"
               style={{ resize: 'vertical', fontSize: 13 }}
             />
+          </div>
+        </Modal>
+      )}
+
+      {/* Conflict Resolution Modal */}
+      {showConflictResolver && conflictFiles.length > 0 && (
+        <Modal
+          size="lg"
+          title={`Resolve Conflicts (${activeConflictIndex + 1}/${conflictFiles.length})`}
+          handleConfirm={handleResolveConflicts}
+          handleCancel={() => setShowConflictResolver(false)}
+          confirmText="Resolve & Continue Merge"
+          confirmDisabled={conflictFiles.some((f) => f.content.includes('<<<<<<<') || f.content.includes('>>>>>>>'))}
+        >
+          <div className="flex flex-col" style={{ minHeight: 400 }}>
+            {/* File tabs */}
+            {conflictFiles.length > 1 && (
+              <div style={{ display: 'flex', gap: 4, padding: '8px 8px 0', flexWrap: 'wrap' }}>
+                {conflictFiles.map((file, i) => (
+                  <button
+                    key={file.path}
+                    onClick={() => setActiveConflictIndex(i)}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: 12,
+                      border: '1px solid rgba(128,128,128,0.3)',
+                      borderRadius: 4,
+                      background: i === activeConflictIndex ? 'rgba(128,128,128,0.15)' : 'transparent',
+                      cursor: 'pointer',
+                      color: 'inherit',
+                      fontWeight: i === activeConflictIndex ? 600 : 400
+                    }}
+                  >
+                    {getFileName(file.path)}
+                    {(file.content.includes('<<<<<<<') || file.content.includes('>>>>>>>')) && (
+                      <IconAlertTriangle size={10} strokeWidth={1.5} style={{ display: 'inline', marginLeft: 4, color: '#f85149', verticalAlign: 'middle' }} />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* File path */}
+            <div style={{ padding: '8px 12px', fontSize: 11, opacity: 0.5 }}>
+              {conflictFiles[activeConflictIndex]?.path}
+            </div>
+
+            {/* Editor hint */}
+            <div style={{ padding: '0 12px 4px', fontSize: 11, color: '#d29922' }}>
+              Remove conflict markers (&lt;&lt;&lt;&lt;&lt;&lt;&lt;, =======, &gt;&gt;&gt;&gt;&gt;&gt;&gt;) and keep the content you want.
+            </div>
+
+            {/* Textarea editor */}
+            <textarea
+              value={conflictFiles[activeConflictIndex]?.content || ''}
+              onChange={(e) => updateConflictFileContent(activeConflictIndex, e.target.value)}
+              style={{
+                flex: 1,
+                margin: '0 12px 8px',
+                padding: 8,
+                fontFamily: 'SF Mono, Monaco, Menlo, Courier New, monospace',
+                fontSize: 12,
+                lineHeight: 1.5,
+                border: '1px solid rgba(128,128,128,0.3)',
+                borderRadius: 4,
+                background: 'transparent',
+                color: 'inherit',
+                resize: 'none',
+                minHeight: 300
+              }}
+            />
+
+            {/* Merge commit message */}
+            <div style={{ padding: '0 12px 8px' }}>
+              <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>Merge Commit Message</label>
+              <input
+                type="text"
+                className="block textbox w-full"
+                value={mergeCommitMessage}
+                onChange={(e) => setMergeCommitMessage(e.target.value)}
+                style={{ fontSize: 12 }}
+              />
+            </div>
           </div>
         </Modal>
       )}
