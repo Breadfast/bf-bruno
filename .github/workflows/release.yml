@@ -49,7 +49,14 @@ jobs:
 
       - name: Build Electron (macOS)
         working-directory: packages/bruno-electron
-        run: npx electron-builder --mac --config electron-builder-config.js --publish never -c.mac.identity=null -c.afterSign=
+        run: |
+          node -e "
+            const config = require('./electron-builder-config.js');
+            delete config.afterSign;
+            config.mac.identity = null;
+            require('fs').writeFileSync('./eb-config-ci.js', 'module.exports = ' + JSON.stringify(config, null, 2));
+          "
+          npx electron-builder --mac --config eb-config-ci.js --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
