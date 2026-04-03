@@ -127,7 +127,7 @@ const GlobalSearchModal = ({ isOpen, onClose }) => {
     return results;
   };
 
-  const performSearch = async (searchQuery) => {
+  const performSearch = (searchQuery) => {
     const normalizedQuery = normalizeQuery(searchQuery);
 
     if (!normalizedQuery) {
@@ -147,39 +147,8 @@ const GlobalSearchModal = ({ isOpen, onClose }) => {
     }
 
     const enablePathMatch = normalizedQuery.includes('/');
-
-    // Search mounted collections via Redux (instant)
-    const reduxResults = searchInCollections(searchTerms, enablePathMatch);
-
-    // Also search unmounted collections via filesystem IPC
-    const unmountedCollections = collections.filter(
-      (c) => c.mountStatus !== 'mounted' && c.pathname
-    ).map((c) => ({ pathname: c.pathname, uid: c.uid, name: c.name }));
-
-    let fsResults = [];
-    if (unmountedCollections.length > 0) {
-      try {
-        const diskResults = await window.ipcRenderer.invoke('renderer:search-collections-on-disk', {
-          collectionPaths: unmountedCollections,
-          searchQuery: normalizedQuery
-        });
-
-        fsResults = (diskResults || []).map((r) => ({
-          type: SEARCH_TYPES.REQUEST,
-          item: { uid: r.filePath, name: r.name, request: { url: r.url, method: r.method } },
-          name: r.name,
-          path: `${r.collectionName}/${r.folderPath ? r.folderPath + '/' : ''}${r.name}`,
-          matchType: MATCH_TYPES.REQUEST,
-          method: r.method.toLowerCase(),
-          collectionUid: r.collectionUid
-        }));
-      } catch (err) {
-        console.error('Filesystem search error:', err);
-      }
-    }
-
-    const allResults = [...reduxResults, ...fsResults];
-    const sortedResults = sortResults(allResults);
+    const searchResults = searchInCollections(searchTerms, enablePathMatch);
+    const sortedResults = sortResults(searchResults);
 
     setResults(sortedResults);
     setSelectedIndex(0);
