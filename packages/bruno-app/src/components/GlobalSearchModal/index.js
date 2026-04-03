@@ -127,7 +127,7 @@ const GlobalSearchModal = ({ isOpen, onClose }) => {
     return results;
   };
 
-  const performSearch = (searchQuery) => {
+  const performSearch = async (searchQuery) => {
     const normalizedQuery = normalizeQuery(searchQuery);
 
     if (!normalizedQuery) {
@@ -147,8 +147,39 @@ const GlobalSearchModal = ({ isOpen, onClose }) => {
     }
 
     const enablePathMatch = normalizedQuery.includes('/');
-    const searchResults = searchInCollections(searchTerms, enablePathMatch);
-    const sortedResults = sortResults(searchResults);
+
+    // Search mounted collections via Redux (instant)
+    const reduxResults = searchInCollections(searchTerms, enablePathMatch);
+
+    // Also search unmounted collections via filesystem IPC
+    const unmountedCollections = collections.filter(
+      (c) => c.mountStatus !== 'mounted' && c.pathname
+    ).map((c) => ({ pathname: c.pathname, uid: c.uid, name: c.name }));
+
+    let fsResults = [];
+    if (unmountedCollections.length > 0) {
+      try {
+        const diskResults = await window.ipcRenderer.invoke('renderer:search-collections-on-disk', {
+          collectionPaths: unmountedCollections,
+          searchQuery: normalizedQuery
+        });
+
+        fsResults = (diskResults || []).map((r) => ({
+          type: SEARCH_TYPES.REQUEST,
+          item: { uid: r.filePath, name: r.name, request: { url: r.url, method: r.method } },
+          name: r.name,
+          path: `${r.collectionName}/${r.folderPath ? r.folderPath + '/' : ''}${r.name}`,
+          matchType: MATCH_TYPES.REQUEST,
+          method: r.method.toLowerCase(),
+          collectionUid: r.collectionUid
+        }));
+      } catch (err) {
+        console.error('Filesystem search error:', err);
+      }
+    }
+
+    const allResults = [...reduxResults, ...fsResults];
+    const sortedResults = sortResults(allResults);
 
     setResults(sortedResults);
     setSelectedIndex(0);
@@ -302,21 +333,6 @@ const GlobalSearchModal = ({ isOpen, onClose }) => {
     setQuery('');
     setResults([]);
   };
-
-  // Mount all unmounted collections so their items are searchable
-  useEffect(() => {
-    if (isOpen) {
-      collections.forEach((collection) => {
-        if (collection.mountStatus !== 'mounted' && collection.pathname) {
-          dispatch(mountCollection({
-            collectionUid: collection.uid,
-            collectionPathname: collection.pathname,
-            brunoConfig: collection.brunoConfig
-          }));
-        }
-      });
-    }
-  }, [isOpen, collections.length]);
 
   // Initialize modal when opened
   useEffect(() => {

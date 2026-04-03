@@ -2116,6 +2116,99 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
     }
   });
 
+  // Filesystem-based search across all collections (no mounting required)
+  ipcMain.handle('renderer:search-collections-on-disk', async (event, { collectionPaths, searchQuery }) => {
+    try {
+      if (!searchQuery || searchQuery.trim().length < 2) return [];
+
+      const searchTerms = searchQuery.toLowerCase().split(/[\s\/]+/).filter(Boolean);
+      const results = [];
+      const MAX_RESULTS = 50;
+
+      for (const colInfo of collectionPaths) {
+        if (results.length >= MAX_RESULTS) break;
+
+        const collectionPath = colInfo.pathname;
+        const collectionUid = colInfo.uid;
+        const collectionName = colInfo.name;
+
+        if (!collectionPath || !fs.existsSync(collectionPath)) continue;
+
+        // Recursively scan for .yml and .bru request files
+        const scanDir = (dir) => {
+          if (results.length >= MAX_RESULTS) return;
+
+          let entries;
+          try {
+            entries = fs.readdirSync(dir, { withFileTypes: true });
+          } catch {
+            return;
+          }
+
+          for (const entry of entries) {
+            if (results.length >= MAX_RESULTS) break;
+            const fullPath = path.join(dir, entry.name);
+
+            if (entry.isDirectory()) {
+              // Skip special directories
+              if (['node_modules', '.git', 'environments'].includes(entry.name)) continue;
+              scanDir(fullPath);
+            } else if (entry.name.endsWith('.yml') || entry.name.endsWith('.bru')) {
+              // Skip collection/folder config files
+              if (['opencollection.yml', 'bruno.json', 'folder.yml', 'folder.bru', 'collection.bru'].includes(entry.name)) continue;
+
+              try {
+                const content = fs.readFileSync(fullPath, 'utf8');
+
+                // Fast regex extraction — no full YAML parse needed
+                const nameMatch = content.match(/^\s*name:\s*(.+)$/m);
+                const urlMatch = content.match(/^\s*url:\s*(.+)$/m);
+                const methodMatch = content.match(/^\s*method:\s*(.+)$/m);
+
+                const name = nameMatch ? nameMatch[1].trim() : '';
+                const url = urlMatch ? urlMatch[1].trim() : '';
+                const method = methodMatch ? methodMatch[1].trim().toUpperCase() : 'GET';
+
+                if (!name && !url) continue;
+
+                const nameLower = name.toLowerCase();
+                const urlLower = url.toLowerCase();
+
+                const matches = searchTerms.every((term) => nameLower.includes(term) || urlLower.includes(term));
+
+                if (matches) {
+                  // Get relative path for display
+                  const relativePath = path.relative(collectionPath, fullPath);
+                  const folderPath = path.dirname(relativePath);
+
+                  results.push({
+                    name,
+                    url,
+                    method,
+                    filePath: fullPath,
+                    relativePath,
+                    folderPath: folderPath !== '.' ? folderPath : '',
+                    collectionUid,
+                    collectionName
+                  });
+                }
+              } catch {
+                // Skip unreadable files
+              }
+            }
+          }
+        };
+
+        scanDir(collectionPath);
+      }
+
+      return results;
+    } catch (err) {
+      console.error('Error in filesystem search:', err);
+      return [];
+    }
+  });
+
   // Implement the Postman to Bruno conversion handler
   ipcMain.handle('renderer:convert-postman-to-bruno', async (event, postmanCollection) => {
     try {
