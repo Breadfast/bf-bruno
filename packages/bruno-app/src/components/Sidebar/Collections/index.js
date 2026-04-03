@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { useSelector } from 'react-redux';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import Collection from './Collection';
 import StyledWrapper from './StyledWrapper';
 import CreateOrOpenCollection from './CreateOrOpenCollection';
@@ -7,9 +7,11 @@ import CollectionSearch from './CollectionSearch/index';
 import InlineCollectionCreator from './InlineCollectionCreator';
 import { normalizePath } from 'utils/common/path';
 import { isScratchCollection } from 'utils/collections';
+import { mountCollection } from 'providers/ReduxStore/slices/collections/actions';
 
 const Collections = ({ showSearch, isCreatingCollection, onCreateClick, onDismissCreate, onOpenAdvancedCreate }) => {
   const [searchText, setSearchText] = useState('');
+  const dispatch = useDispatch();
   const { collections } = useSelector((state) => state.collections);
   const { workspaces, activeWorkspaceUid } = useSelector((state) => state.workspaces);
 
@@ -25,6 +27,21 @@ const Collections = ({ showSearch, isCreatingCollection, onCreateClick, onDismis
       return activeWorkspace.collections?.some((wc) => normalizePath(wc.path) === normalizePath(c.pathname));
     });
   }, [activeWorkspace, collections, workspaces]);
+
+  // Mount all collections when sidebar search is activated
+  useEffect(() => {
+    if (showSearch && workspaceCollections.length > 0) {
+      workspaceCollections.forEach((collection) => {
+        if (collection.mountStatus !== 'mounted' && collection.pathname) {
+          dispatch(mountCollection({
+            collectionUid: collection.uid,
+            collectionPathname: collection.pathname,
+            brunoConfig: collection.brunoConfig
+          }));
+        }
+      });
+    }
+  }, [showSearch]);
 
   if (!workspaceCollections || !workspaceCollections.length) {
     return (

@@ -303,6 +303,21 @@ const GlobalSearchModal = ({ isOpen, onClose }) => {
     setResults([]);
   };
 
+  // Mount all unmounted collections so their items are searchable
+  useEffect(() => {
+    if (isOpen) {
+      collections.forEach((collection) => {
+        if (collection.mountStatus !== 'mounted' && collection.pathname) {
+          dispatch(mountCollection({
+            collectionUid: collection.uid,
+            collectionPathname: collection.pathname,
+            brunoConfig: collection.brunoConfig
+          }));
+        }
+      });
+    }
+  }, [isOpen, collections.length]);
+
   // Initialize modal when opened
   useEffect(() => {
     if (isOpen) {
