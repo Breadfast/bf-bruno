@@ -133,7 +133,7 @@
 | # | Task | Owner | Status | Notes |
 |---|------|-------|--------|-------|
 | 5.1 | Set up `electron-updater` with S3/internal CDN for auto-updates | Dev 1 | [ ] | |
-| 5.2 | CI pipeline: build fork artifacts (macOS, Windows, Linux) on every release tag | Dev 1 | [ ] | |
+| 5.2 | CI pipeline: build fork artifacts (macOS, Windows, Linux) on every release tag | Dev 1 | [x] | Completed 2026-04-03. GitHub Actions release workflow builds .dmg/.zip (macOS arm64+x64), .exe (Windows arm64+x64), .deb/.AppImage (Linux). Assets published to GitHub Releases (v1.0.3). |
 | 5.3 | Set up Homebrew tap for macOS distribution | Dev 1 | [ ] | |
 | 5.4 | Set up Chocolatey internal feed for Windows distribution | Dev 1 | [ ] | |
 | 5.5 | Test auto-update flow end-to-end on all 3 platforms | Dev 1 | [ ] | |
