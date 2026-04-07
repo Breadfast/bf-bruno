@@ -13,9 +13,23 @@ mkdir packages/bruno-electron/web
 cp -r packages/bruno-app/dist/* packages/bruno-electron/web
 
 
-# Update static paths
-sed -i'' -e 's@/static/@static/@g' packages/bruno-electron/web/**.html
-sed -i'' -e 's@/static/font@../../static/font@g' packages/bruno-electron/web/static/css/**.**.css
+# Update static paths (must use ./static for file:// protocol)
+node -e "
+  const fs = require('fs');
+  const path = require('path');
+  const webDir = 'packages/bruno-electron/web';
+  fs.readdirSync(webDir).filter(f => f.endsWith('.html')).forEach(file => {
+    const fp = path.join(webDir, file);
+    fs.writeFileSync(fp, fs.readFileSync(fp, 'utf8').replace(/\/static/g, './static'));
+  });
+  const cssDir = path.join(webDir, 'static/css');
+  if (fs.existsSync(cssDir)) {
+    fs.readdirSync(cssDir).filter(f => f.endsWith('.css')).forEach(file => {
+      const fp = path.join(cssDir, file);
+      fs.writeFileSync(fp, fs.readFileSync(fp, 'utf8').replace(/\/static\/font/g, '../../static/font'));
+    });
+  }
+"
 
 # Remove sourcemaps
 find packages/bruno-electron/web -name '*.map' -type f -delete

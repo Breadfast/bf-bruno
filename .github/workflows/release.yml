@@ -43,8 +43,30 @@ jobs:
           rm -rf packages/bruno-electron/out packages/bruno-electron/web
           mkdir packages/bruno-electron/web
           cp -r packages/bruno-app/dist/* packages/bruno-electron/web
-          sed -i '' 's@/static/@static/@g' packages/bruno-electron/web/*.html
-          sed -i '' 's@/static/font@../../static/font@g' packages/bruno-electron/web/static/css/*.css
+
+          # Fix asset paths for file:// protocol (must use ./static not /static)
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const webDir = 'packages/bruno-electron/web';
+
+            // Fix HTML files: /static -> ./static
+            fs.readdirSync(webDir).filter(f => f.endsWith('.html')).forEach(file => {
+              const fp = path.join(webDir, file);
+              fs.writeFileSync(fp, fs.readFileSync(fp, 'utf8').replace(/\/static/g, './static'));
+            });
+
+            // Fix CSS font paths: /static/font -> ../../static/font
+            const cssDir = path.join(webDir, 'static/css');
+            if (fs.existsSync(cssDir)) {
+              fs.readdirSync(cssDir).filter(f => f.endsWith('.css')).forEach(file => {
+                const fp = path.join(cssDir, file);
+                fs.writeFileSync(fp, fs.readFileSync(fp, 'utf8').replace(/\/static\/font/g, '../../static/font'));
+              });
+            }
+          "
+
+          # Remove source maps
           find packages/bruno-electron/web -name '*.map' -type f -delete
 
       - name: Build Electron (macOS)
@@ -71,7 +93,6 @@ jobs:
           path: |
             packages/bruno-electron/out/*.dmg
             packages/bruno-electron/out/*.zip
-            packages/bruno-electron/out/*.pkg
           retention-days: 30
 
   build-linux:
@@ -111,8 +132,30 @@ jobs:
           rm -rf packages/bruno-electron/out packages/bruno-electron/web
           mkdir packages/bruno-electron/web
           cp -r packages/bruno-app/dist/* packages/bruno-electron/web
-          sed -i 's@/static/@static/@g' packages/bruno-electron/web/*.html
-          sed -i 's@/static/font@../../static/font@g' packages/bruno-electron/web/static/css/*.css
+
+          # Fix asset paths for file:// protocol (must use ./static not /static)
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const webDir = 'packages/bruno-electron/web';
+
+            // Fix HTML files: /static -> ./static
+            fs.readdirSync(webDir).filter(f => f.endsWith('.html')).forEach(file => {
+              const fp = path.join(webDir, file);
+              fs.writeFileSync(fp, fs.readFileSync(fp, 'utf8').replace(/\/static/g, './static'));
+            });
+
+            // Fix CSS font paths: /static/font -> ../../static/font
+            const cssDir = path.join(webDir, 'static/css');
+            if (fs.existsSync(cssDir)) {
+              fs.readdirSync(cssDir).filter(f => f.endsWith('.css')).forEach(file => {
+                const fp = path.join(cssDir, file);
+                fs.writeFileSync(fp, fs.readFileSync(fp, 'utf8').replace(/\/static\/font/g, '../../static/font'));
+              });
+            }
+          "
+
+          # Remove source maps
           find packages/bruno-electron/web -name '*.map' -type f -delete
 
       - name: Build Electron (Linux)
@@ -167,8 +210,30 @@ jobs:
           rm -rf packages/bruno-electron/out packages/bruno-electron/web
           mkdir packages/bruno-electron/web
           cp -r packages/bruno-app/dist/* packages/bruno-electron/web
-          sed -i 's@/static/@static/@g' packages/bruno-electron/web/*.html
-          sed -i 's@/static/font@../../static/font@g' packages/bruno-electron/web/static/css/*.css
+
+          # Fix asset paths for file:// protocol (must use ./static not /static)
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const webDir = 'packages/bruno-electron/web';
+
+            // Fix HTML files: /static -> ./static
+            fs.readdirSync(webDir).filter(f => f.endsWith('.html')).forEach(file => {
+              const fp = path.join(webDir, file);
+              fs.writeFileSync(fp, fs.readFileSync(fp, 'utf8').replace(/\/static/g, './static'));
+            });
+
+            // Fix CSS font paths: /static/font -> ../../static/font
+            const cssDir = path.join(webDir, 'static/css');
+            if (fs.existsSync(cssDir)) {
+              fs.readdirSync(cssDir).filter(f => f.endsWith('.css')).forEach(file => {
+                const fp = path.join(cssDir, file);
+                fs.writeFileSync(fp, fs.readFileSync(fp, 'utf8').replace(/\/static\/font/g, '../../static/font'));
+              });
+            }
+          "
+
+          # Remove source maps
           find packages/bruno-electron/web -name '*.map' -type f -delete
 
       - name: Build Electron (Windows)
