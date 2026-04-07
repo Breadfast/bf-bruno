@@ -181,6 +181,95 @@ const registerWorkspaceIpc = (mainWindow, workspaceWatcher) => {
     }
   });
 
+  ipcMain.handle('renderer:scan-workspaces-folder', async (event, folderPath) => {
+    try {
+      if (!folderPath || !fs.existsSync(folderPath)) {
+        throw new Error('Invalid folder path');
+      }
+
+      const entries = fs.readdirSync(folderPath, { withFileTypes: true });
+      const workspaces = [];
+
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+
+        const dirPath = path.join(folderPath, entry.name);
+        const workspaceYmlPath = path.join(dirPath, 'workspace.yml');
+
+        if (!fs.existsSync(workspaceYmlPath)) continue;
+
+        try {
+          const config = readWorkspaceConfig(dirPath);
+          validateWorkspaceConfig(config);
+
+          const collectionsCount = (config.collections || []).length;
+          const envDir = path.join(dirPath, 'environments');
+          let environmentsCount = 0;
+          if (fs.existsSync(envDir)) {
+            environmentsCount = fs.readdirSync(envDir).filter((f) => f.endsWith('.yml')).length;
+          }
+
+          workspaces.push({
+            name: config.info?.name || entry.name,
+            folderName: entry.name,
+            path: dirPath,
+            collectionCount: collectionsCount,
+            environmentCount: environmentsCount
+          });
+        } catch (err) {
+          // Skip invalid workspaces
+        }
+      }
+
+      return { workspaces };
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  ipcMain.handle('renderer:bulk-open-workspaces', async (event, workspacePaths) => {
+    try {
+      const results = [];
+
+      for (const workspacePath of workspacePaths) {
+        try {
+          validateWorkspacePath(workspacePath);
+          const workspaceConfig = readWorkspaceConfig(workspacePath);
+          validateWorkspaceConfig(workspaceConfig);
+
+          const workspaceUid = getWorkspaceUid(workspacePath);
+          const isDefault = workspaceUid === 'default';
+          const configForClient = prepareWorkspaceConfigForClient(workspaceConfig, workspacePath, isDefault);
+
+          lastOpenedWorkspaces.add(workspacePath);
+          mainWindow.webContents.send('main:workspace-opened', workspacePath, workspaceUid, configForClient);
+
+          if (workspaceWatcher) {
+            workspaceWatcher.addWatcher(mainWindow, workspacePath);
+          }
+
+          mainWindow.webContents.send('main:bulk-open-workspace-progress', {
+            workspace: path.basename(workspacePath),
+            status: 'success'
+          });
+
+          results.push({ path: workspacePath, status: 'success' });
+        } catch (err) {
+          mainWindow.webContents.send('main:bulk-open-workspace-progress', {
+            workspace: path.basename(workspacePath),
+            status: 'error',
+            error: err.message
+          });
+          results.push({ path: workspacePath, status: 'error', error: err.message });
+        }
+      }
+
+      return results;
+    } catch (error) {
+      throw error;
+    }
+  });
+
   ipcMain.handle('renderer:load-workspace-collections', async (event, workspacePath) => {
     try {
       if (!workspacePath) {

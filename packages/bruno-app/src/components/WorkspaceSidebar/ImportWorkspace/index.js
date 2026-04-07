@@ -14,7 +14,8 @@ import Help from 'components/Help';
 
 const TABS = {
   BRUNO: 'bruno',
-  POSTMAN: 'postman'
+  POSTMAN: 'postman',
+  OPEN_FOLDER: 'open_folder'
 };
 
 const STATUS = {
@@ -43,6 +44,14 @@ const ImportWorkspace = ({ onClose }) => {
   const [importStarted, setImportStarted] = useState(false);
   const [workspaceStatus, setWorkspaceStatus] = useState({});
   const [isScanning, setIsScanning] = useState(false);
+
+  // Open folder state
+  const [openFolderPath, setOpenFolderPath] = useState(null);
+  const [scannedBrunoWorkspaces, setScannedBrunoWorkspaces] = useState([]);
+  const [selectedBrunoWorkspaces, setSelectedBrunoWorkspaces] = useState([]);
+  const [openStarted, setOpenStarted] = useState(false);
+  const [openWorkspaceStatus, setOpenWorkspaceStatus] = useState({});
+  const [isScanningBruno, setIsScanningBruno] = useState(false);
 
   const defaultLocation = get(preferences, 'general.defaultLocation', '');
 
@@ -112,9 +121,18 @@ const ImportWorkspace = ({ onClose }) => {
       }));
     };
 
+    const handleOpenProgress = (data) => {
+      setOpenWorkspaceStatus((prev) => ({
+        ...prev,
+        [data.workspace]: data.status
+      }));
+    };
+
     const unsubscribe = ipcRenderer.on('main:postman-workspace-import-progress', handleProgress);
+    const unsubscribeOpen = ipcRenderer.on('main:bulk-open-workspace-progress', handleOpenProgress);
     return () => {
       if (unsubscribe) unsubscribe();
+      if (unsubscribeOpen) unsubscribeOpen();
     };
   }, []);
 
@@ -210,6 +228,26 @@ const ImportWorkspace = ({ onClose }) => {
     }
   };
 
+  const browseWorkspacesFolder = async () => {
+    try {
+      const dirPath = await dispatch(browseDirectory());
+      if (typeof dirPath === 'string' && dirPath.length > 0) {
+        setOpenFolderPath(dirPath);
+        setIsScanningBruno(true);
+        setScannedBrunoWorkspaces([]);
+        setSelectedBrunoWorkspaces([]);
+
+        const result = await window.ipcRenderer.invoke('renderer:scan-workspaces-folder', dirPath);
+        setScannedBrunoWorkspaces(result.workspaces);
+        setSelectedBrunoWorkspaces(result.workspaces);
+        setIsScanningBruno(false);
+      }
+    } catch (error) {
+      setIsScanningBruno(false);
+      toast.error('Failed to scan folder: ' + (error.message || 'Unknown error'));
+    }
+  };
+
   const handleClearFile = () => {
     setSelectedFile(null);
     if (fileInputRef.current) {
@@ -237,17 +275,42 @@ const ImportWorkspace = ({ onClose }) => {
 
   const canSubmitBruno = selectedFile && formik.values.workspaceLocation && !isSubmitting;
   const canSubmitPostman = postmanFolderPath && selectedWorkspaces.length > 0 && formik.values.workspaceLocation && !isSubmitting;
-  const canSubmit = activeTab === TABS.BRUNO ? canSubmitBruno : canSubmitPostman;
+  const canSubmitOpenFolder = openFolderPath && selectedBrunoWorkspaces.length > 0 && !isSubmitting;
+  const canSubmit = activeTab === TABS.BRUNO ? canSubmitBruno : activeTab === TABS.POSTMAN ? canSubmitPostman : canSubmitOpenFolder;
 
   const getConfirmText = () => {
-    if (importStarted) return 'Close';
-    if (isSubmitting) return 'Importing...';
-    return 'Import';
+    if (importStarted || openStarted) return 'Close';
+    if (isSubmitting) return activeTab === TABS.OPEN_FOLDER ? 'Opening...' : 'Importing...';
+    return activeTab === TABS.OPEN_FOLDER ? 'Open' : 'Import';
+  };
+
+  const handleOpenFolderSubmit = async () => {
+    if (!openFolderPath || selectedBrunoWorkspaces.length === 0 || isSubmitting) return;
+    try {
+      setIsSubmitting(true);
+      setOpenStarted(true);
+
+      const initialStatus = {};
+      selectedBrunoWorkspaces.forEach((ws) => {
+        initialStatus[ws.folderName] = STATUS.PENDING;
+      });
+      setOpenWorkspaceStatus(initialStatus);
+
+      const paths = selectedBrunoWorkspaces.map((ws) => ws.path);
+      await window.ipcRenderer.invoke('renderer:bulk-open-workspaces', paths);
+      toast.success(`Opened ${selectedBrunoWorkspaces.length} workspaces`);
+    } catch (error) {
+      toast.error(multiLineMsg('Failed to open workspaces', formatIpcError(error)));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleConfirm = () => {
-    if (importStarted) {
+    if (importStarted || openStarted) {
       onClose();
+    } else if (activeTab === TABS.OPEN_FOLDER) {
+      handleOpenFolderSubmit();
     } else {
       formik.handleSubmit();
     }
@@ -269,12 +332,12 @@ const ImportWorkspace = ({ onClose }) => {
       confirmText={getConfirmText()}
       handleConfirm={handleConfirm}
       handleCancel={onClose}
-      confirmDisabled={!canSubmit && !importStarted}
-      hideCancel={importStarted}
+      confirmDisabled={!canSubmit && !importStarted && !openStarted}
+      hideCancel={importStarted || openStarted}
     >
       <div className="flex flex-col">
         {/* Tabs */}
-        {!importStarted && (
+        {!importStarted && !openStarted && (
           <div className="flex gap-4 mb-4 border-b border-gray-200 dark:border-gray-700">
             <button
               type="button"
@@ -297,6 +360,17 @@ const ImportWorkspace = ({ onClose }) => {
               onClick={() => setActiveTab(TABS.POSTMAN)}
             >
               Postman Backup
+            </button>
+            <button
+              type="button"
+              className={`pb-2 text-sm font-medium ${
+                activeTab === TABS.OPEN_FOLDER
+                  ? 'border-b-2 border-yellow-500 text-yellow-600 dark:text-yellow-400'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+              }`}
+              onClick={() => setActiveTab(TABS.OPEN_FOLDER)}
+            >
+              Open Workspaces Folder
             </button>
           </div>
         )}
@@ -460,6 +534,145 @@ const ImportWorkspace = ({ onClose }) => {
           </div>
         )}
 
+        {/* Open Workspaces Folder Tab */}
+        {activeTab === TABS.OPEN_FOLDER && !openStarted && (
+          <div className="mb-4">
+            <h3 className="font-semibold mb-2">Workspaces Folder</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+              Select a folder containing Bruno workspaces. Each subfolder with a workspace.yml will be detected.
+            </p>
+
+            {openFolderPath ? (
+              <div className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 mb-3">
+                <div className="flex items-center gap-2">
+                  <IconFolder size={20} className="text-gray-500" />
+                  <span className="text-gray-700 dark:text-gray-300 text-sm truncate">{openFolderPath}</span>
+                </div>
+                <button
+                  type="button"
+                  className="text-gray-500 hover:text-red-500 text-sm ml-2 flex-shrink-0"
+                  onClick={() => {
+                    setOpenFolderPath(null);
+                    setScannedBrunoWorkspaces([]);
+                    setSelectedBrunoWorkspaces([]);
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="w-full border-2 border-dashed rounded-lg p-6 transition-colors duration-200 border-gray-200 dark:border-gray-700 hover:border-blue-400"
+                onClick={browseWorkspacesFolder}
+              >
+                <div className="flex flex-col items-center justify-center">
+                  <IconFolder size={28} className="text-gray-400 dark:text-gray-500 mb-3" />
+                  <p className="text-gray-600 dark:text-gray-300">
+                    Click to select workspaces folder
+                  </p>
+                </div>
+              </button>
+            )}
+
+            {isScanningBruno && (
+              <div className="flex items-center gap-2 text-sm text-gray-500 mt-2">
+                <IconLoader2 size={16} className="animate-spin" />
+                Scanning folder...
+              </div>
+            )}
+
+            {scannedBrunoWorkspaces.length > 0 && (
+              <div>
+                <div className="font-semibold mb-2 flex justify-between items-center">
+                  <span>Workspaces ({scannedBrunoWorkspaces.length})</span>
+                  <label className="flex items-center text-sm font-normal select-none cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedBrunoWorkspaces.length === scannedBrunoWorkspaces.length}
+                      onChange={(e) => setSelectedBrunoWorkspaces(e.target.checked ? scannedBrunoWorkspaces : [])}
+                      className="mr-2"
+                    />
+                    Select All
+                  </label>
+                </div>
+                <div className="max-h-[200px] overflow-y-auto border border-slate-600 rounded-md py-2">
+                  {scannedBrunoWorkspaces.map((ws) => (
+                    <label
+                      key={ws.path}
+                      className="flex items-center px-4 py-1.5 text-sm font-normal select-none cursor-pointer justify-between"
+                    >
+                      <div className="flex items-center flex-1">
+                        <input
+                          type="checkbox"
+                          checked={selectedBrunoWorkspaces.some((s) => s.path === ws.path)}
+                          onChange={() => setSelectedBrunoWorkspaces((prev) =>
+                            prev.some((s) => s.path === ws.path)
+                              ? prev.filter((s) => s.path !== ws.path)
+                              : [...prev, ws]
+                          )}
+                          className="mr-3"
+                        />
+                        <span>{ws.name}</span>
+                      </div>
+                      <span className="text-xs text-gray-400">
+                        {ws.collectionCount}c / {ws.environmentCount}e
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {selectedBrunoWorkspaces.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    {selectedBrunoWorkspaces.length} workspaces selected
+                  </p>
+                )}
+              </div>
+            )}
+
+            {openFolderPath && !isScanningBruno && scannedBrunoWorkspaces.length === 0 && (
+              <p className="text-sm text-red-500 mt-2">
+                No Bruno workspaces found. Each subfolder should contain a workspace.yml file.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Open Workspaces Progress */}
+        {openStarted && (
+          <div className="mb-4">
+            <div className="font-semibold mb-2">
+              Opening Workspaces ({selectedBrunoWorkspaces.length})
+            </div>
+            <div className="max-h-[300px] overflow-y-auto border border-slate-600 rounded-md py-2">
+              {selectedBrunoWorkspaces.map((ws) => (
+                <div
+                  key={ws.path}
+                  className="flex items-center px-4 py-1.5 text-sm font-normal justify-between"
+                >
+                  <div className="flex items-center flex-1">
+                    <div className="flex items-center mr-2">
+                      {(!openWorkspaceStatus[ws.folderName] || openWorkspaceStatus[ws.folderName] === STATUS.PENDING) && (
+                        <div className="w-4 h-4" />
+                      )}
+                      {openWorkspaceStatus[ws.folderName] === STATUS.SUCCESS && (
+                        <IconCheck className="text-green-500" size={16} strokeWidth={1.5} />
+                      )}
+                      {openWorkspaceStatus[ws.folderName] === STATUS.ERROR && (
+                        <IconX className="text-red-500" size={16} strokeWidth={1.5} />
+                      )}
+                    </div>
+                    <span>{ws.name}</span>
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    {openWorkspaceStatus[ws.folderName] === STATUS.SUCCESS && 'Opened'}
+                    {openWorkspaceStatus[ws.folderName] === STATUS.ERROR && 'Failed'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Import Progress */}
         {importStarted && (
           <div className="mb-4">
@@ -505,8 +718,8 @@ const ImportWorkspace = ({ onClose }) => {
           </div>
         )}
 
-        {/* Extract Location */}
-        {!importStarted && (
+        {/* Extract Location (not needed for Open Folder tab) */}
+        {!importStarted && !openStarted && activeTab !== TABS.OPEN_FOLDER && (
           <div className="mb-4">
             <label htmlFor="workspace-location" className="font-semibold mb-2 flex items-center">
               Extract Location
