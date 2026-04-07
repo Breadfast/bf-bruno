@@ -60,6 +60,10 @@ const defaultPreferences = {
     enabled: false,
     interval: 1000
   },
+  autoSync: {
+    enabled: false,
+    pullInterval: 30000
+  },
   display: {
     zoomPercentage: 100
   },
@@ -123,6 +127,10 @@ const preferencesSchema = Yup.object().shape({
   autoSave: Yup.object({
     enabled: Yup.boolean(),
     interval: Yup.number().min(100)
+  }),
+  autoSync: Yup.object({
+    enabled: Yup.boolean(),
+    pullInterval: Yup.number().min(1000)
   }),
   display: Yup.object({
     zoomPercentage: Yup.number().min(50).max(150)

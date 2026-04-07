@@ -14,12 +14,13 @@ import openapiSyncReducer from './slices/openapi-sync';
 import gitReducer from './slices/git';
 import { draftDetectMiddleware } from './middlewares/draft/middleware';
 import { autosaveMiddleware } from './middlewares/autosave/middleware';
+import { autosyncMiddleware } from './middlewares/autosync/middleware';
 
 const isDevEnv = () => {
   return import.meta.env.MODE === 'development';
 };
 
-let middleware = [tasksMiddleware.middleware, draftDetectMiddleware, autosaveMiddleware];
+let middleware = [tasksMiddleware.middleware, draftDetectMiddleware, autosaveMiddleware, autosyncMiddleware];
 if (isDevEnv()) {
   middleware = [...middleware, debugMiddleware.middleware];
 }

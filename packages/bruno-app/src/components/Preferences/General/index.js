@@ -57,6 +57,24 @@ const General = () => {
       }
       return true;
     }),
+    autoSync: Yup.object({
+      enabled: Yup.boolean(),
+      pullInterval: Yup.mixed()
+        .transform((value, originalValue) => {
+          return originalValue === '' ? undefined : value;
+        })
+        .test('isNumber', 'Pull Interval must be a number', (value) => {
+          return value === undefined || !isNaN(value);
+        })
+        .test('isValidInterval', 'Pull Interval must be at least 1000ms', (value) => {
+          return value === undefined || Number(value) >= 1000;
+        })
+    }).test('pullIntervalRequired', 'Pull Interval is required when Auto Sync is enabled', (value) => {
+      if (value.enabled && (value.pullInterval === undefined || value.pullInterval === '')) {
+        return false;
+      }
+      return true;
+    }),
     oauth2: Yup.object({
       useSystemBrowser: Yup.boolean()
     }),
@@ -79,6 +97,10 @@ const General = () => {
       autoSave: {
         enabled: get(preferences, 'autoSave.enabled', false),
         interval: get(preferences, 'autoSave.interval', 1000)
+      },
+      autoSync: {
+        enabled: get(preferences, 'autoSync.enabled', false),
+        pullInterval: get(preferences, 'autoSync.pullInterval', 30000)
       },
       oauth2: {
         useSystemBrowser: get(preferences, 'request.oauth2.useSystemBrowser', false)
@@ -119,6 +141,10 @@ const General = () => {
         autoSave: {
           enabled: newPreferences.autoSave.enabled,
           interval: newPreferences.autoSave.interval
+        },
+        autoSync: {
+          enabled: newPreferences.autoSync.enabled,
+          pullInterval: Number(newPreferences.autoSync.pullInterval)
         },
         general: {
           defaultLocation: newPreferences.defaultLocation
@@ -357,6 +383,43 @@ const General = () => {
         )}
         {formik.touched.autoSave?.interval && formik.errors.autoSave?.interval && (
           <div className="text-red-500">{formik.errors.autoSave.interval}</div>
+        )}
+        <div className="flex items-center mt-6">
+          <input
+            id="autoSyncEnabled"
+            type="checkbox"
+            name="autoSync.enabled"
+            checked={formik.values.autoSync.enabled}
+            onChange={formik.handleChange}
+            className="mousetrap mr-0"
+          />
+          <label className="block ml-2 select-none" htmlFor="autoSyncEnabled">
+            Enable Auto Sync (commit &amp; push on save)
+          </label>
+        </div>
+        <div className={`flex flex-col mt-2 ${!formik.values.autoSync.enabled ? 'opacity-50' : ''}`}>
+          <label className="block select-none" htmlFor="autoSyncPullInterval">
+            Pull Interval (in ms)
+          </label>
+          <input
+            type="text"
+            name="autoSync.pullInterval"
+            id="autoSyncPullInterval"
+            className="block textbox mt-2 w-24"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
+            onChange={formik.handleChange}
+            value={formik.values.autoSync.pullInterval}
+            disabled={!formik.values.autoSync.enabled}
+          />
+        </div>
+        {formik.touched.autoSync && formik.errors.autoSync && typeof formik.errors.autoSync === 'string' && (
+          <div className="text-red-500">{formik.errors.autoSync}</div>
+        )}
+        {formik.touched.autoSync?.pullInterval && formik.errors.autoSync?.pullInterval && (
+          <div className="text-red-500">{formik.errors.autoSync.pullInterval}</div>
         )}
         <div className="flex flex-col mt-6">
           <label className="block select-none default-location-label" htmlFor="defaultLocation">

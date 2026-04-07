@@ -22,7 +22,8 @@ const initialCollectionGitState = {
   stashes: [],
   activeDiff: null,
   commitMessage: '',
-  error: null
+  error: null,
+  autoSyncStatus: 'idle' // 'idle' | 'syncing' | 'pulling' | 'done' | 'error'
 };
 
 const gitSlice = createSlice({
@@ -127,6 +128,12 @@ const gitSlice = createSlice({
       if (state.collections[collectionUid]) {
         state.collections[collectionUid].error = null;
       }
+    },
+    setAutoSyncStatus: (state, action) => {
+      const { collectionUid, status } = action.payload;
+      if (state.collections[collectionUid]) {
+        state.collections[collectionUid].autoSyncStatus = status;
+      }
     }
   }
 });
@@ -146,7 +153,8 @@ export const {
   setCommitMessage,
   setGitLoading,
   setGitError,
-  clearGitError
+  clearGitError,
+  setAutoSyncStatus
 } = gitSlice.actions;
 
 // ── Async Thunks ─────────────────────────────────────────────────────
@@ -446,6 +454,195 @@ export const removeRemoteAndRefresh = (collectionUid, collectionPath, remoteName
     toast.success(`Remote "${remoteName}" removed`);
   } catch (err) {
     toast.error(err.message || 'Remove remote failed');
+  }
+};
+
+// ── Auto-Sync Thunks ──────────────────────────────────────────────────
+
+export const autoSyncCollection = (collectionUid, collectionPath) => async (dispatch, getState) => {
+  try {
+    // 1. Check git root from Redux state, fallback to IPC
+    let gitRootPath = getState().git.collections[collectionUid]?.gitRootPath;
+    if (!gitRootPath) {
+      try {
+        gitRootPath = await ipcInvoke('renderer:git-get-root-path', { collectionPath });
+      } catch {
+        return; // not a git repo — skip silently
+      }
+    }
+    if (!gitRootPath) return;
+
+    dispatch(setAutoSyncStatus({ collectionUid, status: 'syncing' }));
+
+    // 2. Stage all tracked + untracked changes under the collection path
+    await ipcInvoke('renderer:git-stage-files', { collectionPath, files: [collectionPath] });
+
+    // 3. Re-check status AFTER staging to get accurate counts
+    const status = await ipcInvoke('renderer:git-get-status', { collectionPath });
+    if (!status.staged.length) {
+      dispatch(setAutoSyncStatus({ collectionUid, status: 'idle' }));
+      return;
+    }
+
+    // 4. Commit with auto-generated message
+    const fileCount = status.staged.length;
+    const message = fileCount === 1
+      ? `Auto-sync: updated ${status.staged[0]?.path?.split('/').pop() || '1 file'}`
+      : `Auto-sync: updated ${fileCount} files`;
+
+    await ipcInvoke('renderer:git-commit', { collectionPath, message });
+
+    // 5. Check if remote exists — if not, just commit locally
+    let remotes;
+    try {
+      remotes = await ipcInvoke('renderer:git-fetch-remotes', { collectionPath });
+    } catch {
+      remotes = [];
+    }
+    if (!remotes.length) {
+      await Promise.all([
+        dispatch(loadGitStatus(collectionUid, collectionPath)),
+        dispatch(loadAheadBehind(collectionUid, collectionPath))
+      ]);
+      dispatch(setAutoSyncStatus({ collectionUid, status: 'done' }));
+      setTimeout(() => dispatch(setAutoSyncStatus({ collectionUid, status: 'idle' })), 3000);
+      return;
+    }
+
+    const remoteName = remotes[0]?.name || 'origin';
+
+    // 6. Get current branch
+    let currentBranch = getState().git.collections[collectionUid]?.currentBranch;
+    if (!currentBranch) {
+      currentBranch = await ipcInvoke('renderer:git-get-current-branch', { collectionPath });
+    }
+
+    // 7. Push
+    const processUid = `auto-sync-push-${Date.now()}`;
+    try {
+      await ipcInvoke('renderer:git-push', {
+        collectionPath, remote: remoteName, remoteBranch: currentBranch, processUid
+      });
+    } catch {
+      // Push failed — pull then retry
+      try {
+        const pullProcessUid = `auto-sync-pull-${Date.now()}`;
+        try {
+          await ipcInvoke('renderer:git-pull', {
+            collectionPath, remote: remoteName, remoteBranch: currentBranch,
+            strategy: '--ff-only', processUid: pullProcessUid
+          });
+        } catch {
+          await ipcInvoke('renderer:git-pull', {
+            collectionPath, remote: remoteName, remoteBranch: currentBranch,
+            strategy: '--no-rebase', processUid: pullProcessUid
+          });
+        }
+
+        // Check for conflicts after pull
+        const postPullStatus = await ipcInvoke('renderer:git-get-status', { collectionPath });
+        if (postPullStatus.conflicted && postPullStatus.conflicted.length > 0) {
+          dispatch(setGitStatus({ collectionUid, status: postPullStatus }));
+          dispatch(setGitPanelOpen({ collectionUid, open: true }));
+          dispatch(setAutoSyncStatus({ collectionUid, status: 'error' }));
+          toast.error('Auto-sync: merge conflict detected. Please resolve conflicts in the Git panel.');
+          return;
+        }
+
+        // Retry push
+        const retryProcessUid = `auto-sync-push-retry-${Date.now()}`;
+        await ipcInvoke('renderer:git-push', {
+          collectionPath, remote: remoteName, remoteBranch: currentBranch, processUid: retryProcessUid
+        });
+      } catch (pullPushErr) {
+        const failStatus = await ipcInvoke('renderer:git-get-status', { collectionPath });
+        if (failStatus.conflicted && failStatus.conflicted.length > 0) {
+          dispatch(setGitStatus({ collectionUid, status: failStatus }));
+          dispatch(setGitPanelOpen({ collectionUid, open: true }));
+          toast.error('Auto-sync: merge conflict detected. Please resolve conflicts in the Git panel.');
+        } else {
+          toast.error(pullPushErr.message || 'Auto-sync: push failed');
+        }
+        dispatch(setAutoSyncStatus({ collectionUid, status: 'error' }));
+        return;
+      }
+    }
+
+    // 8. Refresh git state silently
+    await Promise.all([
+      dispatch(loadGitStatus(collectionUid, collectionPath)),
+      dispatch(loadAheadBehind(collectionUid, collectionPath)),
+      dispatch(loadGitLogs(collectionUid, collectionPath))
+    ]);
+    dispatch(setAutoSyncStatus({ collectionUid, status: 'done' }));
+    setTimeout(() => dispatch(setAutoSyncStatus({ collectionUid, status: 'idle' })), 3000);
+  } catch (err) {
+    toast.error(err.message || 'Auto-sync failed');
+    dispatch(setAutoSyncStatus({ collectionUid, status: 'error' }));
+  }
+};
+
+export const autoSyncPull = (collectionUid, collectionPath) => async (dispatch, getState) => {
+  try {
+    // Check git root from Redux state
+    const gitRootPath = getState().git.collections[collectionUid]?.gitRootPath;
+    if (!gitRootPath) return;
+
+    // Check if remote exists
+    let remotes;
+    try {
+      remotes = await ipcInvoke('renderer:git-fetch-remotes', { collectionPath });
+    } catch {
+      return;
+    }
+    if (!remotes.length) return;
+
+    const remoteName = remotes[0]?.name || 'origin';
+
+    // Get current branch
+    const currentBranch = await ipcInvoke('renderer:git-get-current-branch', { collectionPath });
+    if (!currentBranch) return;
+
+    dispatch(setAutoSyncStatus({ collectionUid, status: 'pulling' }));
+
+    // Pull: ff-only first, fallback to merge
+    const processUid = `auto-sync-pull-${Date.now()}`;
+    try {
+      await ipcInvoke('renderer:git-pull', {
+        collectionPath, remote: remoteName, remoteBranch: currentBranch,
+        strategy: '--ff-only', processUid
+      });
+    } catch {
+      try {
+        await ipcInvoke('renderer:git-pull', {
+          collectionPath, remote: remoteName, remoteBranch: currentBranch,
+          strategy: '--no-rebase', processUid
+        });
+      } catch {
+        // Check for conflicts
+        const status = await ipcInvoke('renderer:git-get-status', { collectionPath });
+        if (status.conflicted && status.conflicted.length > 0) {
+          dispatch(setGitStatus({ collectionUid, status }));
+          dispatch(setGitPanelOpen({ collectionUid, open: true }));
+          dispatch(setAutoSyncStatus({ collectionUid, status: 'error' }));
+          toast.error('Auto-sync: pull conflict detected. Please resolve conflicts in the Git panel.');
+        } else {
+          dispatch(setAutoSyncStatus({ collectionUid, status: 'idle' }));
+        }
+        return;
+      }
+    }
+
+    // Refresh status silently
+    await Promise.all([
+      dispatch(loadGitStatus(collectionUid, collectionPath)),
+      dispatch(loadAheadBehind(collectionUid, collectionPath))
+    ]);
+    dispatch(setAutoSyncStatus({ collectionUid, status: 'done' }));
+    setTimeout(() => dispatch(setAutoSyncStatus({ collectionUid, status: 'idle' })), 3000);
+  } catch {
+    // Periodic pull failures are silent
+    dispatch(setAutoSyncStatus({ collectionUid, status: 'idle' }));
   }
 };
 

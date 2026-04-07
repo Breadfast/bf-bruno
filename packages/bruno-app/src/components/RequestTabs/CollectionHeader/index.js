@@ -15,7 +15,10 @@ import {
   IconUpload,
   IconDownload,
   IconGitBranch,
-  IconPlus
+  IconPlus,
+  IconLoader2,
+  IconCloudUpload,
+  IconAlertTriangle
 } from '@tabler/icons';
 import OpenAPISyncIcon from 'components/Icons/OpenAPISync';
 import GitInitModal from 'components/Git/GitInitModal';
@@ -58,6 +61,8 @@ const CollectionHeader = ({ collection, isScratchCollection }) => {
   const gitCollectionState = useSelector((state) => state.git.collections[collection?.uid]);
   const gitRootPath = gitCollectionState?.gitRootPath || collection?.git?.gitRootPath;
   const gitCurrentBranch = gitCollectionState?.currentBranch;
+  const autoSyncStatus = gitCollectionState?.autoSyncStatus || 'idle';
+  const autoSyncEnabled = useSelector((state) => state.app.preferences?.autoSync?.enabled);
   const gitBranches = gitCollectionState?.branches || [];
   const [showGitInitModal, setShowGitInitModal] = useState(false);
   const [showBranchModal, setShowBranchModal] = useState(false);
@@ -648,6 +653,31 @@ const CollectionHeader = ({ collection, isScratchCollection }) => {
                   >
                     <IconGitBranch size={16} strokeWidth={1.5} />
                   </ActionIcon>
+                </ToolHint>
+              )}
+              {/* Auto-sync status indicator */}
+              {autoSyncEnabled && gitRootPath && autoSyncStatus !== 'idle' && (
+                <ToolHint
+                  text={
+                    autoSyncStatus === 'syncing' ? 'Syncing...'
+                      : autoSyncStatus === 'pulling' ? 'Pulling...'
+                        : autoSyncStatus === 'done' ? 'Synced'
+                          : autoSyncStatus === 'error' ? 'Sync failed' : ''
+                  }
+                  toolhintId="AutoSyncToolhintId"
+                  place="bottom"
+                >
+                  <span className="flex items-center" data-testid="auto-sync-status">
+                    {(autoSyncStatus === 'syncing' || autoSyncStatus === 'pulling') && (
+                      <IconLoader2 size={14} strokeWidth={1.5} className="animate-spin" style={{ color: theme.text }} />
+                    )}
+                    {autoSyncStatus === 'done' && (
+                      <IconCheck size={14} strokeWidth={1.5} style={{ color: '#22c55e' }} />
+                    )}
+                    {autoSyncStatus === 'error' && (
+                      <IconAlertTriangle size={14} strokeWidth={1.5} style={{ color: '#ef4444' }} />
+                    )}
+                  </span>
                 </ToolHint>
               )}
               {/* Runner - always visible */}

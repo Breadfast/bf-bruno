@@ -46,6 +46,10 @@ const initialState = {
       enabled: false,
       interval: 1000
     },
+    autoSync: {
+      enabled: false,
+      pullInterval: 30000
+    },
     cache: {
       sslSession: {
         enabled: false
