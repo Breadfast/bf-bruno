@@ -46,7 +46,7 @@ const {
   canPush,
   cloneGitRepository
 } = require('../utils/git');
-const { createDirectory, removeDirectory } = require('../utils/filesystem');
+const { createDirectory, removePath } = require('../utils/filesystem');
 
 const resolveGitRoot = (collectionPath) => {
   const gitRootPath = getCollectionGitRootPath(collectionPath);
@@ -68,7 +68,7 @@ const registerGitIpc = (mainWindow) => {
       return 'Repository cloned successfully';
     } catch (error) {
       if (directoryCreated) {
-        await removeDirectory(path);
+        await removePath(path);
       }
       throw error;
     }
