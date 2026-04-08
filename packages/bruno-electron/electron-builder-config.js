@@ -32,8 +32,8 @@ const config = {
     icon: 'resources/icons/mac/icon.icns',
     hardenedRuntime: false,
     notarize: false,
-    sign: (config) => {
-      execFileSync('/usr/bin/codesign', ['--sign', '-', '--force', '--deep', config.appPath]);
+    sign: (opts) => {
+      execFileSync('/usr/bin/codesign', ['--sign', '-', '--force', '--deep', opts.app]);
     },
     protocols: [
       {
