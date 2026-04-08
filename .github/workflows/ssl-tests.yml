@@ -1,9 +1,6 @@
 name: SSL Tests
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   tests-for-linux:

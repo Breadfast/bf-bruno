@@ -30,9 +30,7 @@ const config = {
     ],
     icon: 'resources/icons/mac/icon.icns',
     hardenedRuntime: false,
-    identity: null,
-    entitlements: 'resources/entitlements.mac.plist',
-    entitlementsInherit: 'resources/entitlements.mac.plist',
+    identity: '-',
     notarize: false,
     protocols: [
       {
