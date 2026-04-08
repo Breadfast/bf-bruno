@@ -1,4 +1,5 @@
 require('dotenv').config({ path: process.env.DOTENV_PATH });
+const { execFileSync } = require('child_process');
 
 const config = {
   appId: 'com.usebruno.app',
@@ -30,8 +31,10 @@ const config = {
     ],
     icon: 'resources/icons/mac/icon.icns',
     hardenedRuntime: false,
-    identity: '-',
     notarize: false,
+    sign: (config) => {
+      execFileSync('/usr/bin/codesign', ['--sign', '-', '--force', '--deep', config.appPath]);
+    },
     protocols: [
       {
         name: 'Bruno',
